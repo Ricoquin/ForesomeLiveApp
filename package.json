@@ -2,6 +2,7 @@
   "name": "foresome-v1-app",
   "private": true,
   "version": "0.0.1",
+  "homepage": "https://foresomekc.com",
   "type": "module",
   "scripts": {
     "dev": "vite",
