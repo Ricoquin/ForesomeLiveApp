@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ScrollView, Pressable, TextInput } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Pressable, TextInput, Alert } from 'react-native';
 import { supabase } from './supabaseClient';
 import courses from './data/courses.json';
 
@@ -142,6 +142,30 @@ export default function App() {
 
   const selectedCourse = courses.find((course) => course.id === selectedCourseId) || nearestCourses[0] || {};
 
+  // Performance calculations across completed rounds
+  const statsRounds = savedRounds.filter(r => r.summary && typeof r.summary.score === 'number' && r.completedHoles > 0);
+  const totalRoundsCount = statsRounds.length;
+
+  const avgScore = totalRoundsCount > 0
+    ? (statsRounds.reduce((sum, r) => sum + r.summary.score, 0) / totalRoundsCount).toFixed(1)
+    : '--';
+
+  const avgPutts = totalRoundsCount > 0
+    ? (statsRounds.reduce((sum, r) => sum + r.summary.putts, 0) / totalRoundsCount).toFixed(1)
+    : '--';
+
+  const totalCompletedHoles = statsRounds.reduce((sum, r) => sum + (r.completedHoles || 0), 0);
+  const totalGirCount = statsRounds.reduce((sum, r) => sum + (r.summary.gir || 0), 0);
+  const totalFirCount = statsRounds.reduce((sum, r) => sum + (r.summary.fir || 0), 0);
+
+  const avgGir = totalCompletedHoles > 0
+    ? Math.round((totalGirCount / totalCompletedHoles) * 100)
+    : '--';
+
+  const avgFir = totalCompletedHoles > 0
+    ? Math.round((totalFirCount / totalCompletedHoles) * 100)
+    : '--';
+
   return (
     <View style={styles.stage}>
       <View style={styles.headerBar}>
@@ -165,7 +189,221 @@ export default function App() {
           </View>
         </View>
 
-        {screen === 'home' ? (
+        {screen === 'scorecard' ? (
+          <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
+            <View style={styles.scorecardHeader}>
+              <Pressable style={styles.backBtn} onPress={() => setScreen('home')}>
+                <Text style={styles.backBtnText}>Back</Text>
+              </Pressable>
+              <View>
+                <Text style={styles.screenTitle}>{selectedCourse.name || 'Round scorecard'}</Text>
+                <Text style={styles.screenSubtitle}>Tee {selectedTee} · {selectedCourse.city}</Text>
+              </View>
+            </View>
+
+            {holeScores.map((hole, index) => (
+              <View key={hole.hole} style={styles.holeRow}>
+                <View style={styles.holeMeta}>
+                  <Text style={styles.holeLabel}>Hole {hole.hole}</Text>
+                  <Text style={styles.holePar}>Par 4</Text>
+                </View>
+                <View style={styles.scoreInputsRow}>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Score</Text>
+                    <TextInput
+                      style={styles.input}
+                      keyboardType="numeric"
+                      value={hole.score}
+                      onChangeText={(text) => updateHole(index, 'score', text)}
+                    />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Putts</Text>
+                    <TextInput
+                      style={styles.input}
+                      keyboardType="numeric"
+                      value={hole.putts}
+                      onChangeText={(text) => updateHole(index, 'putts', text)}
+                    />
+                  </View>
+                </View>
+                <View style={styles.toggleRow}>
+                  <Pressable
+                    style={[styles.toggleChip, hole.fir && styles.toggleChipActive]}
+                    onPress={() => updateHole(index, 'fir', !hole.fir)}
+                  >
+                    <Text style={[styles.toggleText, hole.fir && styles.toggleTextActive]}>FIR</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.toggleChip, hole.gir && styles.toggleChipActive]}
+                    onPress={() => updateHole(index, 'gir', !hole.gir)}
+                  >
+                    <Text style={[styles.toggleText, hole.gir && styles.toggleTextActive]}>GIR</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+
+            <Pressable style={styles.saveRoundBtn} onPress={saveRound}>
+              <Text style={styles.saveRoundText}>Save round</Text>
+            </Pressable>
+          </ScrollView>
+        ) : selectedNav === 'Stats' ? (
+          <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
+            <View style={styles.statsHeader}>
+              <Text style={styles.statsTitle}>Performance Dashboard</Text>
+              <Text style={styles.statsSubtitle}>Overall analysis across {totalRoundsCount} rounds</Text>
+            </View>
+
+            <View style={styles.statsGrid}>
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{avgScore}</Text>
+                <Text style={styles.statLabel}>Avg Score</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{avgPutts}</Text>
+                <Text style={styles.statLabel}>Avg Putts</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{avgGir !== '--' ? `${avgGir}%` : '--'}</Text>
+                <Text style={styles.statLabel}>GIR %</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{avgFir !== '--' ? `${avgFir}%` : '--'}</Text>
+                <Text style={styles.statLabel}>FIR %</Text>
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <View style={styles.sectionHead}>
+                <Text style={styles.sectionTitle}>Round History</Text>
+              </View>
+              {savedRounds.length === 0 ? (
+                <Text style={styles.emptyText}>No rounds recorded yet. Record a round to see history.</Text>
+              ) : (
+                savedRounds.map((round) => (
+                  <View key={round.id} style={styles.historyCard}>
+                    <View style={styles.historyRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.historyCourse} numberOfLines={1}>{round.courseName}</Text>
+                        <Text style={styles.historyMeta}>{round.tee} tees · {new Date(round.createdAt).toLocaleDateString()}</Text>
+                      </View>
+                      <View style={styles.historyScoreContainer}>
+                        <Text style={styles.historyScoreValue}>{round.summary.score}</Text>
+                        <Text style={styles.historyScoreLabel}>Strokes</Text>
+                      </View>
+                    </View>
+                    <View style={styles.historyStats}>
+                      <View style={styles.historyStatBlock}>
+                        <Text style={styles.historyStatVal}>{round.summary.putts}</Text>
+                        <Text style={styles.historyStatLbl}>Putts</Text>
+                      </View>
+                      <View style={styles.historyStatBlock}>
+                        <Text style={styles.historyStatVal}>{round.summary.fir}</Text>
+                        <Text style={styles.historyStatLbl}>FIR</Text>
+                      </View>
+                      <View style={styles.historyStatBlock}>
+                        <Text style={styles.historyStatVal}>{round.summary.gir}</Text>
+                        <Text style={styles.historyStatLbl}>GIR</Text>
+                      </View>
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+          </ScrollView>
+        ) : selectedNav === 'Snap' ? (
+          <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
+            <View style={styles.statsHeader}>
+              <Text style={styles.statsTitle}>Community Snaps</Text>
+              <Text style={styles.statsSubtitle}>Moments from the Kansas City Golf Community</Text>
+            </View>
+
+            <Pressable style={styles.snapPostBtn} onPress={() => Alert.alert('Share a Snap', 'Camera and photo uploads will be enabled in Phase 2!')}>
+              <Text style={styles.snapPostBtnText}>📸 Share your Golf Snap</Text>
+            </Pressable>
+
+            <View style={styles.snapCard}>
+              <View style={styles.snapHeader}>
+                <Text style={styles.snapAuthor}>Keith M.</Text>
+                <Text style={styles.snapTime}>2h ago</Text>
+              </View>
+              <Text style={styles.snapText}>Caught the sunrise at Swope Memorial. Pin positions are tough today! ⛳️🌅</Text>
+              <View style={[styles.snapImage, { backgroundColor: '#2e4936' }]}>
+                <Text style={styles.snapImageText}>🌅 Swope Memorial GC - Hole 9</Text>
+              </View>
+            </View>
+
+            <View style={styles.snapCard}>
+              <View style={styles.snapHeader}>
+                <Text style={styles.snapAuthor}>TJ B.</Text>
+                <Text style={styles.snapTime}>Yesterday</Text>
+              </View>
+              <Text style={styles.snapText}>Finally broke 80 at Hodge Park! GIR was on point today. 🏆🏌️‍♂️</Text>
+              <View style={[styles.snapImage, { backgroundColor: '#b89a5c' }]}>
+                <Text style={[styles.snapImageText, { color: '#1a2c20' }]}>Scorecard: 78 strokes 🌟</Text>
+              </View>
+            </View>
+
+            <View style={styles.snapCard}>
+              <View style={styles.snapHeader}>
+                <Text style={styles.snapAuthor}>JR (Rico)</Text>
+                <Text style={styles.snapTime}>2 days ago</Text>
+              </View>
+              <Text style={styles.snapText}>Oak Ridge back nine is looking spectacular. Let's get a group together for Saturday!</Text>
+              <View style={[styles.snapImage, { backgroundColor: '#243d2c' }]}>
+                <Text style={styles.snapImageText}>🏌️‍♂️ Oak Ridge GC - Hole 14</Text>
+              </View>
+            </View>
+          </ScrollView>
+        ) : selectedNav === 'Alerts' ? (
+          <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
+            <View style={styles.statsHeader}>
+              <Text style={styles.statsTitle}>Alerts & Invites</Text>
+              <Text style={styles.statsSubtitle}>Stay connected with your foursomes</Text>
+            </View>
+
+            <View style={styles.alertCard}>
+              <View style={styles.alertHeader}>
+                <Text style={styles.alertTitle}>Tee Time Invitation</Text>
+                <Text style={styles.alertTime}>Just now</Text>
+              </View>
+              <Text style={styles.alertBody}>Keith M. invited you to join a foursome at Oak Ridge GC on Friday, Jun 5 at 8:20 AM.</Text>
+              <View style={styles.alertActions}>
+                <Pressable style={styles.alertButtonAccept} onPress={() => Alert.alert('Invitation Accepted', 'You have successfully joined the tee time!')}>
+                  <Text style={styles.alertButtonTextAccept}>Accept</Text>
+                </Pressable>
+                <Pressable style={styles.alertButtonDecline} onPress={() => Alert.alert('Invitation Declined', 'You have declined the invitation.')}>
+                  <Text style={styles.alertButtonTextDecline}>Decline</Text>
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={styles.alertCard}>
+              <View style={styles.alertHeader}>
+                <Text style={styles.alertTitle}>Friend Activity</Text>
+                <Text style={styles.alertTime}>4h ago</Text>
+              </View>
+              <Text style={styles.alertBody}>TJ B. completed a round of 78 strokes at Blue Valley. Check out their metrics on the board.</Text>
+            </View>
+
+            <View style={styles.alertCard}>
+              <View style={styles.alertHeader}>
+                <Text style={styles.alertTitle}>Group Approved</Text>
+                <Text style={styles.alertTime}>1d ago</Text>
+              </View>
+              <Text style={styles.alertBody}>Your membership request for 'The Women's Locker Room' private golf club has been approved.</Text>
+            </View>
+
+            <View style={styles.alertCard}>
+              <View style={styles.alertHeader}>
+                <Text style={styles.alertTitle}>Course Update</Text>
+                <Text style={styles.alertTime}>2d ago</Text>
+              </View>
+              <Text style={styles.alertBody}>Swope Memorial GC added 4 new weekend afternoon tee times. Book before they fill up.</Text>
+            </View>
+          </ScrollView>
+        ) : (
           <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
             <View style={styles.hero}>
               <Text style={styles.heroLabel}>Selected course</Text>
@@ -275,103 +513,46 @@ export default function App() {
                 <Text style={styles.sectionTitle}>Upcoming tee times</Text>
                 <Text style={styles.sectionLink}>View all</Text>
               </View>
-            {cards.map((card) => {
-              const isSelected = selectedCard === card.course;
-              return (
-                <Pressable
-                  key={card.course}
-                  style={[styles.teeCard, isSelected && styles.teeCardActive]}
-                  onPress={() => setSelectedCard(card.course)}
-                >
-                  <View style={styles.row}>
-                    <View>
-                      <Text style={styles.course}>{card.course}</Text>
-                      <Text style={styles.meta}>{card.meta}</Text>
+              {cards.map((card) => {
+                const isSelected = selectedCard === card.course;
+                return (
+                  <Pressable
+                    key={card.course}
+                    style={[styles.teeCard, isSelected && styles.teeCardActive]}
+                    onPress={() => setSelectedCard(card.course)}
+                  >
+                    <View style={styles.row}>
+                      <View>
+                        <Text style={styles.course}>{card.course}</Text>
+                        <Text style={styles.meta}>{card.meta}</Text>
+                      </View>
+                      <View style={styles.rightBlock}>
+                        <Text style={styles.time}>{card.time}</Text>
+                        <Text style={styles.date}>{card.date}</Text>
+                      </View>
                     </View>
-                    <View style={styles.rightBlock}>
-                      <Text style={styles.time}>{card.time}</Text>
-                      <Text style={styles.date}>{card.date}</Text>
+                    <View style={styles.footer}>
+                      <View style={styles.players}>
+                        {card.players.map((player, index) => (
+                          <View key={`${player}-${index}`} style={styles.playerDot}>
+                            <Text style={styles.playerDotText}>{player}</Text>
+                          </View>
+                        ))}
+                      </View>
+                      <Text style={styles.hcapBadge}>HCP 12</Text>
                     </View>
-                  </View>
-                  <View style={styles.footer}>
-                    <View style={styles.players}>
-                      {card.players.map((player, index) => (
-                        <View key={`${player}-${index}`} style={styles.playerDot}>
-                          <Text style={styles.playerDotText}>{player}</Text>
-                        </View>
-                      ))}
-                    </View>
-                    <Text style={styles.hcapBadge}>HCP 12</Text>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
-        </ScrollView>
-      ) : (
-        <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
-          <View style={styles.scorecardHeader}>
-            <Pressable style={styles.backBtn} onPress={() => setScreen('home')}>
-              <Text style={styles.backBtnText}>Back</Text>
-            </Pressable>
-            <View>
-              <Text style={styles.screenTitle}>{selectedCourse.name || 'Round scorecard'}</Text>
-              <Text style={styles.screenSubtitle}>Tee {selectedTee} · {selectedCourse.city}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
-          </View>
+          </ScrollView>
+        )}
 
-          {holeScores.map((hole, index) => (
-            <View key={hole.hole} style={styles.holeRow}>
-              <View style={styles.holeMeta}>
-                <Text style={styles.holeLabel}>Hole {hole.hole}</Text>
-                <Text style={styles.holePar}>Par 4</Text>
-              </View>
-              <View style={styles.scoreInputsRow}>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Score</Text>
-                  <TextInput
-                    style={styles.input}
-                    keyboardType="numeric"
-                    value={hole.score}
-                    onChangeText={(text) => updateHole(index, 'score', text)}
-                  />
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Putts</Text>
-                  <TextInput
-                    style={styles.input}
-                    keyboardType="numeric"
-                    value={hole.putts}
-                    onChangeText={(text) => updateHole(index, 'putts', text)}
-                  />
-                </View>
-              </View>
-              <View style={styles.toggleRow}>
-                <Pressable
-                  style={[styles.toggleChip, hole.fir && styles.toggleChipActive]}
-                  onPress={() => updateHole(index, 'fir', !hole.fir)}
-                >
-                  <Text style={[styles.toggleText, hole.fir && styles.toggleTextActive]}>FIR</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.toggleChip, hole.gir && styles.toggleChipActive]}
-                  onPress={() => updateHole(index, 'gir', !hole.gir)}
-                >
-                  <Text style={[styles.toggleText, hole.gir && styles.toggleTextActive]}>GIR</Text>
-                </Pressable>
-              </View>
-            </View>
-          ))}
-
-          <Pressable style={styles.saveRoundBtn} onPress={saveRound}>
-            <Text style={styles.saveRoundText}>Save round</Text>
+        {screen !== 'scorecard' && (
+          <Pressable style={styles.fab} onPress={() => setScreen('scorecard')}>
+            <Text style={styles.fabText}>+</Text>
           </Pressable>
-        </ScrollView>
-      )}
-
-        <Pressable style={styles.fab}>
-          <Text style={styles.fabText}>+</Text>
-        </Pressable>
+        )}
 
         <View style={styles.bottomNav}>
           {navItems.map((item) => {
@@ -941,5 +1122,236 @@ const styles = StyleSheet.create({
   },
   navActiveText: {
     color: '#b89a5c'
+  },
+  statsHeader: {
+    marginTop: 20,
+    marginHorizontal: 16,
+    marginBottom: 16
+  },
+  statsTitle: {
+    fontSize: 18,
+    color: '#f1ead9',
+    fontWeight: '700'
+  },
+  statsSubtitle: {
+    fontSize: 11,
+    color: '#c9bf9f',
+    marginTop: 4
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: 12,
+    marginBottom: 20
+  },
+  statCard: {
+    width: '45%',
+    aspectRatio: 1.2,
+    margin: '2.5%',
+    backgroundColor: '#243d2c',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#335041',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 10
+  },
+  statValue: {
+    fontSize: 26,
+    color: '#b89a5c',
+    fontWeight: '700',
+    marginBottom: 4
+  },
+  statLabel: {
+    fontSize: 9,
+    color: '#c9bf9f',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8
+  },
+  historyCard: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 14,
+    backgroundColor: '#243d2c',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#335041'
+  },
+  historyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8
+  },
+  historyCourse: {
+    fontSize: 13,
+    color: '#f1ead9',
+    fontWeight: '700',
+    marginBottom: 2
+  },
+  historyMeta: {
+    fontSize: 9,
+    color: '#c9bf9f'
+  },
+  historyScoreContainer: {
+    alignItems: 'center',
+    backgroundColor: '#1a2c20',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#335041'
+  },
+  historyScoreValue: {
+    fontSize: 14,
+    color: '#b89a5c',
+    fontWeight: '700'
+  },
+  historyScoreLabel: {
+    fontSize: 7,
+    color: '#c9bf9f',
+    textTransform: 'uppercase'
+  },
+  historyStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: '#335041',
+    paddingTop: 8,
+    marginTop: 4
+  },
+  historyStatBlock: {
+    flex: 1,
+    alignItems: 'center'
+  },
+  historyStatVal: {
+    fontSize: 12,
+    color: '#f1ead9',
+    fontWeight: '700'
+  },
+  historyStatLbl: {
+    fontSize: 8,
+    color: '#c9bf9f',
+    textTransform: 'uppercase'
+  },
+  snapPostBtn: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    backgroundColor: '#243d2c',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#335041',
+    paddingVertical: 12,
+    alignItems: 'center'
+  },
+  snapPostBtnText: {
+    color: '#b89a5c',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase'
+  },
+  snapCard: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
+    backgroundColor: '#243d2c',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#335041'
+  },
+  snapHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8
+  },
+  snapAuthor: {
+    fontSize: 13,
+    color: '#f1ead9',
+    fontWeight: '700'
+  },
+  snapTime: {
+    fontSize: 9,
+    color: '#c9bf9f'
+  },
+  snapText: {
+    fontSize: 12,
+    color: '#c9bf9f',
+    lineHeight: 16,
+    marginBottom: 10
+  },
+  snapImage: {
+    height: 120,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden'
+  },
+  snapImageText: {
+    fontSize: 11,
+    color: '#f1ead9',
+    fontWeight: '600'
+  },
+  alertCard: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 14,
+    backgroundColor: '#243d2c',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#335041'
+  },
+  alertHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6
+  },
+  alertTitle: {
+    fontSize: 12,
+    color: '#b89a5c',
+    fontWeight: '700'
+  },
+  alertTime: {
+    fontSize: 8,
+    color: '#c9bf9f'
+  },
+  alertBody: {
+    fontSize: 11,
+    color: '#f1ead9',
+    lineHeight: 15
+  },
+  alertActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10
+  },
+  alertButtonAccept: {
+    flex: 1,
+    backgroundColor: '#b89a5c',
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center'
+  },
+  alertButtonDecline: {
+    flex: 1,
+    backgroundColor: '#1a2c20',
+    borderWidth: 1,
+    borderColor: '#335041',
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center'
+  },
+  alertButtonTextAccept: {
+    fontSize: 10,
+    color: '#1a2c20',
+    fontWeight: '700'
+  },
+  alertButtonTextDecline: {
+    fontSize: 10,
+    color: '#f1ead9',
+    fontWeight: '700'
   }
 });
+
