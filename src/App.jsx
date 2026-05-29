@@ -34,8 +34,31 @@ export default function App() {
   const [selectedTee, setSelectedTee] = useState('Blue');
   const [screen, setScreen] = useState('home');
   const [savedRounds, setSavedRounds] = useState([]);
-  const [loadingRounds, setLoadingRounds] = useState(true);
+  const [loadingRounds, setLoadingRounds] = useState(false);
   const teeOptions = ['Blue', 'White', 'Red'];
+  
+  // Auth & Profile states
+  const [session, setSession] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [usernameInput, setUsernameInput] = useState('');
+  const [handicapInput, setHandicapInput] = useState('12');
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'signup'
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+
+  // Snaps states
+  const [snapsList, setSnapsList] = useState([]);
+  const [loadingSnaps, setLoadingSnaps] = useState(false);
+  const [isPostingSnap, setIsPostingSnap] = useState(false);
+  const [snapContent, setSnapContent] = useState('');
+  const [snapBgColor, setSnapBgColor] = useState('#2e4936');
+
+  // Alerts states
+  const [alertsList, setAlertsList] = useState([]);
+  const [loadingAlerts, setLoadingAlerts] = useState(false);
+
   const [holeScores, setHoleScores] = useState(
     Array.from({ length: 18 }, (_, index) => ({
       hole: index + 1,
@@ -57,11 +80,28 @@ export default function App() {
     completedHoles: round.completed_holes ?? round.completedHoles
   });
 
-  const fetchRounds = async () => {
+  const fetchProfile = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      if (!error && data) {
+        setProfile(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchRounds = async (userId) => {
+    if (!userId) return;
     setLoadingRounds(true);
     const { data, error } = await supabase
       .from('rounds')
       .select('*')
+      .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -72,9 +112,182 @@ export default function App() {
     setLoadingRounds(false);
   };
 
+  const fetchSnaps = async () => {
+    setLoadingSnaps(true);
+    const { data, error } = await supabase
+      .from('snaps')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('Error loading snaps:', error);
+    } else {
+      setSnapsList(data || []);
+    }
+    setLoadingSnaps(false);
+  };
+
+  const fetchAlerts = async (userId) => {
+    if (!userId) return;
+    setLoadingAlerts(true);
+    const { data, error } = await supabase
+      .from('alerts')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('Error loading alerts:', error);
+    } else {
+      setAlertsList(data || []);
+    }
+    setLoadingAlerts(false);
+  };
+
+  // Auth setup useEffect
   useEffect(() => {
-    fetchRounds();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) {
+        fetchProfile(session.user.id);
+        fetchRounds(session.user.id);
+        fetchAlerts(session.user.id);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) {
+        fetchProfile(session.user.id);
+        fetchRounds(session.user.id);
+        fetchAlerts(session.user.id);
+      } else {
+        setProfile(null);
+        setSavedRounds([]);
+        setAlertsList([]);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  // Fetch community snaps when tab switches to snaps
+  useEffect(() => {
+    if (selectedNav === 'Snap') {
+      fetchSnaps();
+    }
+  }, [selectedNav]);
+
+  const handleAuth = async () => {
+    setAuthError('');
+    setAuthLoading(true);
+    if (!email || !password) {
+      setAuthError('Email and password are required.');
+      setAuthLoading(false);
+      return;
+    }
+
+    try {
+      if (authMode === 'signup') {
+        if (!usernameInput) {
+          setAuthError('Username is required.');
+          setAuthLoading(false);
+          return;
+        }
+
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password
+        });
+
+        if (error) {
+          setAuthError(error.message);
+        } else if (data?.user) {
+          const initials = usernameInput
+            .split(' ')
+            .map((n) => n[0])
+            .join('')
+            .toUpperCase()
+            .slice(0, 2);
+
+          const { error: profileError } = await supabase.from('profiles').insert([
+            {
+              id: data.user.id,
+              username: usernameInput,
+              handicap: parseInt(handicapInput, 10) || 0,
+              initials: initials || 'US'
+            }
+          ]);
+
+          if (profileError) {
+            console.error('Error saving profile:', profileError);
+          }
+          Alert.alert('Registration Successful', 'Welcome to ForeSome!');
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+        if (error) {
+          setAuthError(error.message);
+        }
+      }
+    } catch (err) {
+      setAuthError(err.message || 'An unexpected error occurred.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handlePostSnap = async () => {
+    if (!snapContent) {
+      Alert.alert('Caption required', 'Please add a caption to share.');
+      return;
+    }
+
+    try {
+      setAuthLoading(true);
+      const newSnap = {
+        user_id: session.user.id,
+        author_name: profile?.username || 'Golf Player',
+        content: snapContent,
+        image_bg_color: snapBgColor,
+        image_text: '⛳️ Foresome Community'
+      };
+
+      const { error } = await supabase.from('snaps').insert([newSnap]);
+      if (error) {
+        Alert.alert('Error sharing snap', error.message);
+      } else {
+        setSnapContent('');
+        setIsPostingSnap(false);
+        fetchSnaps();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleAlertAction = async (alertId, newStatus) => {
+    try {
+      const { error } = await supabase
+        .from('alerts')
+        .update({ status: newStatus })
+        .eq('id', alertId);
+
+      if (error) {
+        Alert.alert('Error', error.message);
+      } else {
+        setAlertsList((prev) =>
+          prev.map((a) => (a.id === alertId ? { ...a, status: newStatus } : a))
+        );
+        Alert.alert('Success', `You have ${newStatus} the invite.`);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const roundSummary = holeScores.reduce(
     (acc, hole) => {
@@ -95,9 +308,11 @@ export default function App() {
   ).length;
 
   const saveRound = async () => {
+    if (!session?.user) return;
+
     const round = {
       id: `${Date.now()}`,
-      user_id: 'anonymous',
+      user_id: session.user.id,
       course_id: selectedCourseId,
       course_name: selectedCourse.name,
       tee: selectedTee,
@@ -111,6 +326,7 @@ export default function App() {
 
     if (error) {
       console.error('Error saving round:', error);
+      Alert.alert('Error saving round', error.message);
       return;
     }
 
@@ -164,8 +380,125 @@ export default function App() {
     : '--';
 
   const avgFir = totalCompletedHoles > 0
-    ? Math.round((totalFirCount / totalCompletedHoles) * 100)
-    : '--';
+    ? Math.round((totalFirCount / totalCompletedHoles)  // If no active session, show premium signup/login screen
+  if (!session) {
+    return (
+      <View style={styles.stage}>
+        <View style={styles.headerBar}>
+          <View style={styles.headerLeft}>
+            <View style={styles.dot} />
+            <Text style={styles.headerText}>KC Golf Community</Text>
+          </View>
+        </View>
+
+        <View style={styles.phone}>
+          <View style={styles.notch} />
+          <View style={styles.statusBar}>
+            <Text style={styles.statusText}>8:42</Text>
+            <View style={styles.statusIcons}>
+              <Text style={styles.iconText}>🔋</Text>
+              <Text style={styles.iconText}>📶</Text>
+              <Text style={styles.iconText}>☁️</Text>
+            </View>
+          </View>
+
+          <ScrollView style={styles.screen} contentContainerStyle={{ padding: 24, justifyContent: 'center', minHeight: '80%' }}>
+            <View style={{ alignItems: 'center', marginBottom: 28 }}>
+              <Text style={{ fontFamily: 'Playfair Display', fontSize: 36, fontWeight: '900', color: '#f1ead9' }}>
+                Fore<Text style={{ color: '#b89a5c', fontStyle: 'italic' }}>Some</Text>
+              </Text>
+              <Text style={{ fontSize: 9, letterSpacing: 2.5, textTransform: 'uppercase', color: '#c9bf9f', marginTop: 4 }}>
+                Golf Community
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', backgroundColor: '#243d2c', borderRadius: 12, padding: 4, marginBottom: 20 }}>
+              <Pressable 
+                style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8, backgroundColor: authMode === 'login' ? '#1a2c20' : 'transparent' }}
+                onPress={() => { setAuthMode('login'); setAuthError(''); }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: authMode === 'login' ? '#f1ead9' : '#c9bf9f' }}>Log In</Text>
+              </Pressable>
+              <Pressable 
+                style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8, backgroundColor: authMode === 'signup' ? '#1a2c20' : 'transparent' }}
+                onPress={() => { setAuthMode('signup'); setAuthError(''); }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: authMode === 'signup' ? '#f1ead9' : '#c9bf9f' }}>Sign Up</Text>
+              </Pressable>
+            </View>
+
+            {authError ? (
+              <View style={{ backgroundColor: 'rgba(232, 138, 138, 0.15)', borderWidth: 1, borderColor: '#e88a8a', borderRadius: 10, padding: 12, marginBottom: 18 }}>
+                <Text style={{ color: '#e88a8a', fontSize: 12, lineHeight: 15 }}>{authError}</Text>
+              </View>
+            ) : null}
+
+            <View style={{ marginBottom: 14 }}>
+              <Text style={styles.inputLabel}>Email Address</Text>
+              <TextInput
+                style={[styles.input, { color: '#f1ead9', fontSize: 13, paddingVertical: 10 }]}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                placeholder="you@example.com"
+                placeholderTextColor="#8c8467"
+                value={email}
+                onChangeText={setEmail}
+              />
+            </View>
+
+            <View style={{ marginBottom: 14 }}>
+              <Text style={styles.inputLabel}>Password</Text>
+              <TextInput
+                style={[styles.input, { color: '#f1ead9', fontSize: 13, paddingVertical: 10 }]}
+                secureTextEntry
+                placeholder="••••••••"
+                placeholderTextColor="#8c8467"
+                value={password}
+                onChangeText={setPassword}
+              />
+            </View>
+
+            {authMode === 'signup' && (
+              <>
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={styles.inputLabel}>Username / Name</Text>
+                  <TextInput
+                    style={[styles.input, { color: '#f1ead9', fontSize: 13, paddingVertical: 10 }]}
+                    placeholder="Keith M."
+                    placeholderTextColor="#8c8467"
+                    value={usernameInput}
+                    onChangeText={setUsernameInput}
+                  />
+                </View>
+
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={styles.inputLabel}>Golf Handicap (HCP)</Text>
+                  <TextInput
+                    style={[styles.input, { color: '#f1ead9', fontSize: 13, paddingVertical: 10 }]}
+                    keyboardType="numeric"
+                    placeholder="12"
+                    placeholderTextColor="#8c8467"
+                    value={handicapInput}
+                    onChangeText={setHandicapInput}
+                  />
+                </View>
+              </>
+            )}
+
+            <Pressable 
+              style={[styles.saveRoundBtn, { marginTop: 14, backgroundColor: '#b89a5c', opacity: authLoading ? 0.7 : 1 }]}
+              onPress={handleAuth}
+              disabled={authLoading}
+            >
+              <Text style={{ color: '#1a2c20', fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' }}>
+                {authLoading ? 'Please wait...' : authMode === 'login' ? 'Access Account' : 'Register Now'}
+              </Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.stage}>
@@ -174,8 +507,20 @@ export default function App() {
           <View style={styles.dot} />
           <Text style={styles.headerText}>KC Golf Community</Text>
         </View>
-        <Pressable style={styles.togglePro}>
-          <Text style={styles.toggleProText}>PRO</Text>
+        <Pressable 
+          style={styles.togglePro}
+          onPress={() => {
+            Alert.alert(
+              'Sign Out',
+              'Are you sure you want to sign out?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Sign Out', onPress: () => supabase.auth.signOut() }
+              ]
+            );
+          }}
+        >
+          <Text style={styles.toggleProText}>Sign Out</Text>
         </Pressable>
       </View>
 
@@ -320,42 +665,82 @@ export default function App() {
               <Text style={styles.statsSubtitle}>Moments from the Kansas City Golf Community</Text>
             </View>
 
-            <Pressable style={styles.snapPostBtn} onPress={() => Alert.alert('Share a Snap', 'Camera and photo uploads will be enabled in Phase 2!')}>
-              <Text style={styles.snapPostBtnText}>📸 Share your Golf Snap</Text>
-            </Pressable>
+            {isPostingSnap ? (
+              <View style={[styles.scorecardForm, { marginHorizontal: 16, marginBottom: 16 }]}>
+                <Text style={[styles.inputLabel, { color: '#b89a5c', fontSize: 13, marginBottom: 10 }]}>Share your Golf Snap</Text>
+                
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={styles.inputLabel}>Caption / Text</Text>
+                  <TextInput
+                    style={[styles.input, { color: '#f1ead9', fontSize: 12, height: 60, textAlignVertical: 'top' }]}
+                    multiline
+                    numberOfLines={3}
+                    placeholder="Sunrise was great today at Swope Memorial GC!"
+                    placeholderTextColor="#8c8467"
+                    value={snapContent}
+                    onChangeText={setSnapContent}
+                  />
+                </View>
 
-            <View style={styles.snapCard}>
-              <View style={styles.snapHeader}>
-                <Text style={styles.snapAuthor}>Keith M.</Text>
-                <Text style={styles.snapTime}>2h ago</Text>
-              </View>
-              <Text style={styles.snapText}>Caught the sunrise at Swope Memorial. Pin positions are tough today! ⛳️🌅</Text>
-              <View style={[styles.snapImage, { backgroundColor: '#2e4936' }]}>
-                <Text style={styles.snapImageText}>🌅 Swope Memorial GC - Hole 9</Text>
-              </View>
-            </View>
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={styles.inputLabel}>Background Card Color</Text>
+                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 6, marginBottom: 6 }}>
+                    {['#2e4936', '#b89a5c', '#1a2c20', '#243d2c'].map((color) => (
+                      <Pressable
+                        key={color}
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 16,
+                          backgroundColor: color,
+                          borderWidth: snapBgColor === color ? 2 : 0,
+                          borderColor: '#f1ead9'
+                        }}
+                        onPress={() => setSnapBgColor(color)}
+                      />
+                    ))}
+                  </View>
+                </View>
 
-            <View style={styles.snapCard}>
-              <View style={styles.snapHeader}>
-                <Text style={styles.snapAuthor}>TJ B.</Text>
-                <Text style={styles.snapTime}>Yesterday</Text>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <Pressable style={[styles.saveRoundBtn, { flex: 1, marginVertical: 0 }]} onPress={handlePostSnap}>
+                    <Text style={styles.saveRoundText}>Share</Text>
+                  </Pressable>
+                  <Pressable style={[styles.saveRoundBtn, { flex: 1, backgroundColor: 'transparent', borderWidth: 1, borderColor: '#335041', marginVertical: 0 }]} onPress={() => setIsPostingSnap(false)}>
+                    <Text style={[styles.saveRoundText, { color: '#c9bf9f' }]}>Cancel</Text>
+                  </Pressable>
+                </View>
               </View>
-              <Text style={styles.snapText}>Finally broke 80 at Hodge Park! GIR was on point today. 🏆🏌️‍♂️</Text>
-              <View style={[styles.snapImage, { backgroundColor: '#b89a5c' }]}>
-                <Text style={[styles.snapImageText, { color: '#1a2c20' }]}>Scorecard: 78 strokes 🌟</Text>
-              </View>
-            </View>
+            ) : (
+              <Pressable style={styles.snapPostBtn} onPress={() => setIsPostingSnap(true)}>
+                <Text style={styles.snapPostBtnText}>📸 Share your Golf Snap</Text>
+              </Pressable>
+            )}
 
-            <View style={styles.snapCard}>
-              <View style={styles.snapHeader}>
-                <Text style={styles.snapAuthor}>JR (Rico)</Text>
-                <Text style={styles.snapTime}>2 days ago</Text>
-              </View>
-              <Text style={styles.snapText}>Oak Ridge back nine is looking spectacular. Let's get a group together for Saturday!</Text>
-              <View style={[styles.snapImage, { backgroundColor: '#243d2c' }]}>
-                <Text style={styles.snapImageText}>🏌️‍♂️ Oak Ridge GC - Hole 14</Text>
-              </View>
-            </View>
+            {loadingSnaps ? (
+              <Text style={styles.emptyText}>Loading community snaps…</Text>
+            ) : snapsList.length === 0 ? (
+              <Text style={styles.emptyText}>No community snaps yet. Be the first to share one!</Text>
+            ) : (
+              snapsList.map((snap) => (
+                <View key={snap.id} style={styles.snapCard}>
+                  <View style={styles.snapHeader}>
+                    <Text style={styles.snapAuthor}>{snap.author_name}</Text>
+                    <Text style={styles.snapTime}>{new Date(snap.created_at).toLocaleDateString()}</Text>
+                  </View>
+                  <Text style={styles.snapText}>{snap.content}</Text>
+                  {snap.image_url ? (
+                    <View style={[styles.snapImage, { backgroundColor: '#1e3527' }]}>
+                      <Text style={styles.snapImageText}>📷 Shared Photo</Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.snapImage, { backgroundColor: snap.image_bg_color || '#2e4936' }]}>
+                      <Text style={styles.snapImageText}>{snap.image_text || '⛳️ ForeSome'}</Text>
+                    </View>
+                  )}
+                </View>
+              ))
+            )}
           </ScrollView>
         ) : selectedNav === 'Alerts' ? (
           <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
@@ -364,48 +749,51 @@ export default function App() {
               <Text style={styles.statsSubtitle}>Stay connected with your foursomes</Text>
             </View>
 
-            <View style={styles.alertCard}>
-              <View style={styles.alertHeader}>
-                <Text style={styles.alertTitle}>Tee Time Invitation</Text>
-                <Text style={styles.alertTime}>Just now</Text>
-              </View>
-              <Text style={styles.alertBody}>Keith M. invited you to join a foursome at Oak Ridge GC on Friday, Jun 5 at 8:20 AM.</Text>
-              <View style={styles.alertActions}>
-                <Pressable style={styles.alertButtonAccept} onPress={() => Alert.alert('Invitation Accepted', 'You have successfully joined the tee time!')}>
-                  <Text style={styles.alertButtonTextAccept}>Accept</Text>
-                </Pressable>
-                <Pressable style={styles.alertButtonDecline} onPress={() => Alert.alert('Invitation Declined', 'You have declined the invitation.')}>
-                  <Text style={styles.alertButtonTextDecline}>Decline</Text>
-                </Pressable>
-              </View>
-            </View>
-
-            <View style={styles.alertCard}>
-              <View style={styles.alertHeader}>
-                <Text style={styles.alertTitle}>Friend Activity</Text>
-                <Text style={styles.alertTime}>4h ago</Text>
-              </View>
-              <Text style={styles.alertBody}>TJ B. completed a round of 78 strokes at Blue Valley. Check out their metrics on the board.</Text>
-            </View>
-
-            <View style={styles.alertCard}>
-              <View style={styles.alertHeader}>
-                <Text style={styles.alertTitle}>Group Approved</Text>
-                <Text style={styles.alertTime}>1d ago</Text>
-              </View>
-              <Text style={styles.alertBody}>Your membership request for 'The Women's Locker Room' private golf club has been approved.</Text>
-            </View>
-
-            <View style={styles.alertCard}>
-              <View style={styles.alertHeader}>
-                <Text style={styles.alertTitle}>Course Update</Text>
-                <Text style={styles.alertTime}>2d ago</Text>
-              </View>
-              <Text style={styles.alertBody}>Swope Memorial GC added 4 new weekend afternoon tee times. Book before they fill up.</Text>
-            </View>
+            {loadingAlerts ? (
+              <Text style={styles.emptyText}>Loading alerts…</Text>
+            ) : alertsList.length === 0 ? (
+              <Text style={styles.emptyText}>No active alerts or invitations at this time.</Text>
+            ) : (
+              alertsList.map((alert) => (
+                <View key={alert.id} style={styles.alertCard}>
+                  <View style={styles.alertHeader}>
+                    <Text style={styles.alertTitle}>{alert.title}</Text>
+                    <Text style={styles.alertTime}>{new Date(alert.created_at).toLocaleDateString()}</Text>
+                  </View>
+                  <Text style={styles.alertBody}>{alert.body}</Text>
+                  {alert.type === 'invitation' && alert.status === 'pending' && (
+                    <View style={styles.alertActions}>
+                      <Pressable style={styles.alertButtonAccept} onPress={() => handleAlertAction(alert.id, 'accepted')}>
+                        <Text style={styles.alertButtonTextAccept}>Accept</Text>
+                      </Pressable>
+                      <Pressable style={styles.alertButtonDecline} onPress={() => handleAlertAction(alert.id, 'declined')}>
+                        <Text style={styles.alertButtonTextDecline}>Decline</Text>
+                      </Pressable>
+                    </View>
+                  )}
+                  {alert.type === 'invitation' && alert.status !== 'pending' && (
+                    <Text style={[styles.alertTime, { marginTop: 6, fontStyle: 'italic', textTransform: 'capitalize' }]}>
+                      Status: {alert.status}
+                    </Text>
+                  )}
+                </View>
+              ))
+            )}
           </ScrollView>
         ) : (
           <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
+            {/* User Greeting Section */}
+            <View style={{ paddingHorizontal: 16, marginTop: 16, marginBottom: 4, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ fontSize: 18, color: '#f1ead9', fontFamily: 'Playfair Display', fontWeight: 'bold' }}>
+                Hey, {profile?.username || 'Golf Player'}!
+              </Text>
+              <View style={{ backgroundColor: '#243d2c', borderWidth: 1, borderColor: '#b89a5c', borderRadius: 8, paddingVertical: 4, paddingHorizontal: 8 }}>
+                <Text style={{ fontSize: 9, color: '#b89a5c', fontWeight: '700', letterSpacing: 0.5 }}>
+                  HCP {profile?.handicap !== undefined ? profile.handicap : '12'}
+                </Text>
+              </View>
+            </View>
+
             <View style={styles.hero}>
               <Text style={styles.heroLabel}>Selected course</Text>
               <Text style={styles.heroTitle}>{selectedCourse.name || 'Select a course'}</Text>
@@ -414,7 +802,7 @@ export default function App() {
               </Text>
               <View style={styles.heroStats}>
                 <Text style={styles.heroStatText}>
-                  <Text style={styles.heroStatValue}>{selectedCourse.par || '--'}</Text> par
+                  <Text style={styles.heroStatValue}>{selectedCourse.par || '--'}</Text par
                 </Text>
                 <Text style={styles.heroStatText}>
                   <Text style={styles.heroStatValue}>
@@ -475,7 +863,7 @@ export default function App() {
             <View style={styles.section}>
               <View style={styles.sectionHead}>
                 <Text style={styles.sectionTitle}>Latest saved round</Text>
-                <Pressable onPress={fetchRounds} style={styles.refreshButton}>
+                <Pressable onPress={() => fetchRounds(session?.user?.id)} style={styles.refreshButton}>
                   <Text style={styles.sectionLink}>{loadingRounds ? 'Refreshing…' : 'Refresh'}</Text>
                 </Pressable>
               </View>
@@ -540,7 +928,7 @@ export default function App() {
                           </View>
                         ))}
                       </View>
-                      <Text style={styles.hcapBadge}>HCP 12</Text>
+                      <Text style={styles.hcapBadge}>HCP {profile?.handicap !== undefined ? profile.handicap : '12'}</Text>
                     </View>
                   </Pressable>
                 );
