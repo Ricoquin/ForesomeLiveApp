@@ -2,7 +2,7 @@
 
 create table if not exists rounds (
   id text primary key,
-  user_id text not null,
+  user_id text not null default 'anonymous',
   course_id text,
   course_name text,
   tee text,

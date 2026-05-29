@@ -3,22 +3,23 @@
 -- Enable RLS on the rounds table
 alter table rounds enable row level security;
 
--- Allow authenticated users to read their own rounds only
-create policy "Users can select their own rounds" on rounds
+-- Allow anyone to select rounds (public access)
+create policy "Allow public read access" on rounds
   for select
-  using (auth.uid() = user_id);
+  using (true);
 
--- Allow authenticated users to insert rounds for themselves only
-create policy "Users can insert their own rounds" on rounds
+-- Allow anyone to insert rounds (public access)
+create policy "Allow public insert access" on rounds
   for insert
-  with check (auth.uid() = user_id);
+  with check (true);
 
--- Optional: allow authenticated users to update or delete their own rounds
--- create policy "Users can update their own rounds" on rounds
---   for update
---   using (auth.uid() = user_id)
---   with check (auth.uid() = user_id);
---
--- create policy "Users can delete their own rounds" on rounds
---   for delete
---   using (auth.uid() = user_id);
+-- Optional: allow anyone to update or delete their own rounds (using ID matching if desired)
+create policy "Allow public update access" on rounds
+  for update
+  using (true)
+  with check (true);
+
+create policy "Allow public delete access" on rounds
+  for delete
+  using (true);
+

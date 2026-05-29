@@ -97,6 +97,7 @@ export default function App() {
   const saveRound = async () => {
     const round = {
       id: `${Date.now()}`,
+      user_id: 'anonymous',
       course_id: selectedCourseId,
       course_name: selectedCourse.name,
       tee: selectedTee,
