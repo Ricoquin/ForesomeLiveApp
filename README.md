@@ -47,3 +47,11 @@ The app expects a `rounds` table with these columns:
 - `completed_holes` (integer)
 
 Optionally, use `supabase/schema.sql` to create the table directly in the SQL editor.
+
+## Row Level Security
+
+To make the project more secure, enable RLS on the `rounds` table and apply policies using `supabase/policies.sql`.
+
+1. In the Supabase dashboard, go to the SQL editor.
+2. Run the SQL in `supabase/policies.sql`.
+3. If you later add auth, update the table with a `user_id` column and replace the open anon policies with user-based policies.
