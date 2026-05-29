@@ -23,3 +23,27 @@ Add the following A records for `foresomekc.com`:
 - `185.199.111.153`
 
 If you need help verifying your GitHub Pages settings in the repo, I can guide you through the exact UI steps.
+
+## Supabase setup
+
+1. Create a new Supabase project at https://app.supabase.com.
+2. Copy the project URL and anonymous key into a local `.env` file from `.env.example`:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+3. Create the `rounds` table in Supabase using the SQL in `supabase/schema.sql`.
+4. In Supabase, make sure the `rounds` table is allowed to be read and inserted from the client (configure Row Level Security or use a service role key if needed).
+5. Run your app locally with `npm run dev` and confirm rounds load/save correctly.
+
+## Supabase schema
+
+The app expects a `rounds` table with these columns:
+- `id` (text, primary key)
+- `course_id` (text)
+- `course_name` (text)
+- `tee` (text)
+- `created_at` (timestamptz)
+- `hole_scores` (jsonb)
+- `summary` (jsonb)
+- `completed_holes` (integer)
+
+Optionally, use `supabase/schema.sql` to create the table directly in the SQL editor.
