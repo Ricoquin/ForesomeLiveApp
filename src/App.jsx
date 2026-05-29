@@ -22,12 +22,47 @@ const cards = [
 ];
 
 // Shoal Creek scorecard details
-const SHOAL_CREEK_COURSE = {
-  name: "Shoal Creek",
-  pars: [4, 5, 3, 4, 4, 3, 5, 4, 4, 4, 3, 5, 4, 4, 3, 5, 4, 4],
-  hcps: [7, 11, 15, 5, 1, 17, 9, 13, 3, 8, 16, 12, 4, 2, 18, 10, 14, 6],
-  yards: [385, 520, 160, 412, 395, 185, 540, 420, 405, 390, 170, 530, 410, 430, 150, 550, 400, 420]
-};
+// Generate realistic hole-by-hole data from a course's total par
+function generateCourseData(course) {
+  const totalPar = parseInt(course?.par) || 72;
+  const numHoles = parseInt(course?.holes) || 18;
+  
+  // Standard par distribution for 18 holes based on total par
+  const parTemplates = {
+    70: [4, 4, 3, 4, 4, 3, 5, 4, 4,   4, 3, 4, 4, 3, 5, 4, 4, 3],
+    71: [4, 5, 3, 4, 4, 3, 5, 4, 4,   4, 3, 4, 4, 3, 5, 4, 4, 3],
+    72: [4, 5, 3, 4, 4, 3, 5, 4, 4,   4, 3, 5, 4, 4, 3, 5, 4, 4],
+    73: [4, 5, 3, 4, 4, 3, 5, 4, 5,   4, 3, 5, 4, 4, 3, 5, 4, 4],
+  };
+  const pars = parTemplates[totalPar] || parTemplates[72];
+  
+  // Generate yards based on par
+  const yardRanges = { 3: [140, 210], 4: [350, 450], 5: [490, 570] };
+  const yards = pars.map(p => {
+    const [min, max] = yardRanges[p];
+    return Math.round((min + Math.random() * (max - min)) / 5) * 5;
+  });
+  
+  // Standard HCP allocation
+  const hcps = [7, 11, 15, 5, 1, 17, 9, 13, 3, 8, 16, 12, 4, 2, 18, 10, 14, 6];
+  
+  return {
+    name: course?.name || 'Unknown Course',
+    pars: pars.slice(0, numHoles),
+    yards: yards.slice(0, numHoles),
+    hcps: hcps.slice(0, numHoles)
+  };
+}
+
+// Seed the random so each course gets consistent data per session
+const courseDataCache = {};
+function getCourseData(course) {
+  if (!course) return generateCourseData(course);
+  if (!courseDataCache[course.id]) {
+    courseDataCache[course.id] = generateCourseData(course);
+  }
+  return courseDataCache[course.id];
+}
 
 export default function App() {
   // Auth & Profile states
@@ -49,20 +84,24 @@ export default function App() {
 
   // Manual Tracker State
   const [currentHole, setCurrentHole] = useState(1);
+  const [selectedCourse, setSelectedCourse] = useState(courses.find(c => c.name.includes("Shoal Creek")) || courses[0]);
+  const [selectedTee, setSelectedTee] = useState('Blue');
+  const [showEor, setShowEor] = useState(false);
+  const [holeStatView, setHoleStatView] = useState('score');
+
+  // Active course data — recalculates when selectedCourse changes
+  const activeCourseData = getCourseData(selectedCourse);
+
   const [holeScores, setHoleScores] = useState(
     Array.from({ length: 18 }, (_, index) => ({
       hole: index + 1,
-      score: SHOAL_CREEK_COURSE.pars[index], // Default to hole par
+      score: activeCourseData.pars[index], // Default to hole par
       fir: false,
       gir: false,
       pen: false,
       putts: 2 // Default to 2 putts
     }))
   );
-  const [selectedCourse, setSelectedCourse] = useState(courses.find(c => c.name.includes("Shoal Creek")) || courses[0]);
-  const [selectedTee, setSelectedTee] = useState('Blue');
-  const [showEor, setShowEor] = useState(false);
-  const [holeStatView, setHoleStatView] = useState('score'); // 'score' | 'putts' | 'firgir'
 
   // Quick Entry Form state
   const [quickCourse, setQuickCourse] = useState('Shoal Creek');
@@ -309,7 +348,7 @@ export default function App() {
   };
 
   const toggleStat = (statName) => {
-    if (statName === 'fir' && SHOAL_CREEK_COURSE.pars[currentHole - 1] === 3) return;
+    if (statName === 'fir' && activeCourseData.pars[currentHole - 1] === 3) return;
     setHoleScores(prev =>
       prev.map(h => h.hole === currentHole ? { ...h, [statName]: !h[statName] } : h)
     );
@@ -321,13 +360,13 @@ export default function App() {
   let runningPar = 0;
   for (let i = 0; i < played; i++) {
     runningTotal += Number(holeScores[i].score);
-    runningPar += SHOAL_CREEK_COURSE.pars[i];
+    runningPar += activeCourseData.pars[i];
   }
   const vsParDiff = runningTotal - runningPar;
   const vsParText = played === 0 ? 'E' : (vsParDiff === 0 ? 'E' : (vsParDiff > 0 ? `+${vsParDiff}` : `${vsParDiff}`));
 
   // Stepper score diff formatting
-  const currentPar = SHOAL_CREEK_COURSE.pars[currentHole - 1];
+  const currentPar = activeCourseData.pars[currentHole - 1];
   const currentDiff = currentHoleData.score - currentPar;
   let stepperLabel = 'PAR';
   let stepperResult = 'EVEN';
@@ -402,7 +441,7 @@ export default function App() {
       setHoleScores(
         Array.from({ length: 18 }, (_, index) => ({
           hole: index + 1,
-          score: SHOAL_CREEK_COURSE.pars[index],
+          score: activeCourseData.pars[index],
           fir: false,
           gir: false,
           pen: false,
@@ -947,8 +986,8 @@ export default function App() {
                 <div className="hole-info-value" id="trackPar">PAR {currentPar}</div>
               </div>
               <div className="hole-info-right">
-                <div className="hole-info-value" id="trackYards">{SHOAL_CREEK_COURSE.yards[currentHole - 1]} YDS</div>
-                <div className="hole-info-sub" id="trackHcp">HCP {SHOAL_CREEK_COURSE.hcps[currentHole - 1]}</div>
+                <div className="hole-info-value" id="trackYards">{activeCourseData.yards[currentHole - 1]} YDS</div>
+                <div className="hole-info-sub" id="trackHcp">HCP {activeCourseData.hcps[currentHole - 1]}</div>
               </div>
             </div>
           </div>
@@ -1324,7 +1363,7 @@ export default function App() {
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((h) => (
                       <div key={h} className="hole-col">
                         <div className="grid-header">H{h}</div>
-                        <div className="grid-par">{SHOAL_CREEK_COURSE.pars[h - 1]}</div>
+                        <div className="grid-par">{activeCourseData.pars[h - 1]}</div>
                         <div className="grid-score">{cellContent(h - 1)}</div>
                       </div>
                     ))}
@@ -1340,7 +1379,7 @@ export default function App() {
                     {[10, 11, 12, 13, 14, 15, 16, 17, 18].map((h) => (
                       <div key={h} className="hole-col">
                         <div className="grid-header">H{h}</div>
-                        <div className="grid-par">{SHOAL_CREEK_COURSE.pars[h - 1]}</div>
+                        <div className="grid-par">{activeCourseData.pars[h - 1]}</div>
                         <div className="grid-score">{cellContent(h - 1)}</div>
                       </div>
                     ))}
