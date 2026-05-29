@@ -3,21 +3,22 @@
 -- Enable RLS on the rounds table
 alter table rounds enable row level security;
 
--- Allow anonymous clients to read rounds when using the public anon key
-create policy "Allow anon select" on rounds
+-- Allow authenticated users to read their own rounds only
+create policy "Users can select their own rounds" on rounds
   for select
-  using (auth.role() = 'anon');
+  using (auth.uid() = user_id);
 
--- Allow anonymous clients to insert rounds when using the public anon key
-create policy "Allow anon insert" on rounds
+-- Allow authenticated users to insert rounds for themselves only
+create policy "Users can insert their own rounds" on rounds
   for insert
-  with check (auth.role() = 'anon');
+  with check (auth.uid() = user_id);
 
--- If you later add authentication, use a user_id column and secure policies:
--- alter table rounds add column user_id text;
--- create policy "Users can select their own rounds" on rounds
---   for select
---   using (auth.uid() = user_id);
--- create policy "Users can insert their own rounds" on rounds
---   for insert
+-- Optional: allow authenticated users to update or delete their own rounds
+-- create policy "Users can update their own rounds" on rounds
+--   for update
+--   using (auth.uid() = user_id)
 --   with check (auth.uid() = user_id);
+--
+-- create policy "Users can delete their own rounds" on rounds
+--   for delete
+--   using (auth.uid() = user_id);

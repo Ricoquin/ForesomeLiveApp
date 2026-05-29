@@ -2,6 +2,7 @@
 
 create table if not exists rounds (
   id text primary key,
+  user_id text not null,
   course_id text,
   course_name text,
   tee text,
@@ -13,3 +14,4 @@ create table if not exists rounds (
 
 create index if not exists rounds_created_at_idx on rounds (created_at desc);
 create index if not exists rounds_course_id_idx on rounds (course_id);
+create index if not exists rounds_user_id_idx on rounds (user_id);

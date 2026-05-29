@@ -34,6 +34,14 @@ If you need help verifying your GitHub Pages settings in the repo, I can guide y
 4. In Supabase, make sure the `rounds` table is allowed to be read and inserted from the client (configure Row Level Security or use a service role key if needed).
 5. Run your app locally with `npm run dev` and confirm rounds load/save correctly.
 
+## Supabase auth
+
+This app uses Supabase authentication so each round is stored for the signed-in user.
+
+- Use email/password sign in from the app.
+- The `user_id` column in `rounds` is set to `auth.uid()`.
+- Only the authenticated user can read and insert their own rounds.
+
 ## Supabase schema
 
 The app expects a `rounds` table with these columns:
