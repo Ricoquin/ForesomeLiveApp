@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ScrollView, Pressable, TextInput, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import courses from './data/courses.json';
+import foresomeLogo from './assets/foresome-logo.png';
 
+// Foursome mock cards
 const cards = [
   {
     course: 'Oak Ridge GC',
@@ -20,23 +21,15 @@ const cards = [
   }
 ];
 
-const navItems = [
-  { icon: '🏌️', label: 'Rounds' },
-  { icon: '🧾', label: 'Stats' },
-  { icon: '⚡', label: 'Snap' },
-  { icon: '🔔', label: 'Alerts' }
-];
+// Shoal Creek scorecard details
+const SHOAL_CREEK_COURSE = {
+  name: "Shoal Creek",
+  pars: [4, 5, 3, 4, 4, 3, 5, 4, 4, 4, 3, 5, 4, 4, 3, 5, 4, 4],
+  hcps: [7, 11, 15, 5, 1, 17, 9, 13, 3, 8, 16, 12, 4, 2, 18, 10, 14, 6],
+  yards: [385, 520, 160, 412, 395, 185, 540, 420, 405, 390, 170, 530, 410, 430, 150, 550, 400, 420]
+};
 
 export default function App() {
-  const [selectedNav, setSelectedNav] = useState('Rounds');
-  const [selectedCard, setSelectedCard] = useState(cards[0].course);
-  const [selectedCourseId, setSelectedCourseId] = useState(courses[0]?.id);
-  const [selectedTee, setSelectedTee] = useState('Blue');
-  const [screen, setScreen] = useState('home');
-  const [savedRounds, setSavedRounds] = useState([]);
-  const [loadingRounds, setLoadingRounds] = useState(false);
-  const teeOptions = ['Blue', 'White', 'Red'];
-  
   // Auth & Profile states
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -48,37 +41,114 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
 
-  // Snaps states
-  const [snapsList, setSnapsList] = useState([]);
-  const [loadingSnaps, setLoadingSnaps] = useState(false);
-  const [isPostingSnap, setIsPostingSnap] = useState(false);
-  const [snapContent, setSnapContent] = useState('');
-  const [snapBgColor, setSnapBgColor] = useState('#2e4936');
+  // App navigation state
+  const [screen, setScreen] = useState('home'); // 'home', 'chat', 'snap-intro', 'log', 'stats', 'camera', 'review', 'paywall'
+  const [isPro, setIsPro] = useState(false);
+  const [savedRounds, setSavedRounds] = useState([]);
+  const [loadingRounds, setLoadingRounds] = useState(false);
 
-  // Alerts states
-  const [alertsList, setAlertsList] = useState([]);
-  const [loadingAlerts, setLoadingAlerts] = useState(false);
-
+  // Manual Tracker State
+  const [currentHole, setCurrentHole] = useState(1);
   const [holeScores, setHoleScores] = useState(
     Array.from({ length: 18 }, (_, index) => ({
       hole: index + 1,
-      score: '',
+      score: SHOAL_CREEK_COURSE.pars[index], // Default to hole par
       fir: false,
       gir: false,
-      putts: ''
+      pen: false,
+      putts: 2 // Default to 2 putts
     }))
   );
+  const [selectedCourse, setSelectedCourse] = useState(courses.find(c => c.name.includes("Shoal Creek")) || courses[0]);
+  const [selectedTee, setSelectedTee] = useState('Blue');
+  const [showEor, setShowEor] = useState(false);
+  const [holeStatView, setHoleStatView] = useState('score'); // 'score' | 'putts' | 'firgir'
 
-  const normalizeRound = (round) => ({
-    id: round.id,
-    courseId: round.course_id ?? round.courseId,
-    courseName: round.course_name ?? round.courseName,
-    tee: round.tee,
-    createdAt: round.created_at ?? round.createdAt,
-    holeScores: round.hole_scores ?? round.holeScores,
-    summary: round.summary ?? round.summary,
-    completedHoles: round.completed_holes ?? round.completedHoles
-  });
+  // Quick Entry Form state
+  const [quickCourse, setQuickCourse] = useState('Shoal Creek');
+  const [quickTee, setQuickTee] = useState('Blue');
+  const [quickDate, setQuickDate] = useState('2026-05-17');
+  const [quickScore, setQuickScore] = useState(84);
+  const [quickFir, setQuickFir] = useState(8);
+  const [quickGir, setQuickGir] = useState(6);
+  const [quickPutts, setQuickPutts] = useState(32);
+
+  // Course search
+  const [courseSearchQuery, setCourseSearchQuery] = useState('');
+  const [courseSearchOpen, setCourseSearchOpen] = useState(false);
+  const [quickCourseSearchQuery, setQuickCourseSearchQuery] = useState('');
+  const [quickCourseSearchOpen, setQuickCourseSearchOpen] = useState(false);
+  const courseSearchRef = useRef(null);
+  const quickCourseSearchRef = useRef(null);
+
+  // Filter courses by search query
+  const filteredCourses = courses.filter(c =>
+    c.name.toLowerCase().includes(courseSearchQuery.toLowerCase())
+  ).slice(0, 8);
+  const filteredQuickCourses = courses.filter(c =>
+    c.name.toLowerCase().includes(quickCourseSearchQuery.toLowerCase())
+  ).slice(0, 8);
+
+  // Close search dropdowns on outside click
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (courseSearchRef.current && !courseSearchRef.current.contains(e.target)) setCourseSearchOpen(false);
+      if (quickCourseSearchRef.current && !quickCourseSearchRef.current.contains(e.target)) setQuickCourseSearchOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  // Chat State
+  const [chatMessages, setChatMessages] = useState([
+    { sender: 'TJ', text: "Sat's locked in. Tee at 7:42. Who's bringing the bourbon this time", isMe: false, time: 'YESTERDAY · 6:24 PM' },
+    { sender: 'KEITH', text: "Not my turn. Rico still owes me from Swope 😤", isMe: false },
+    { sender: 'YOU', text: "Fine fine. Rieger's High Rye. But I'm not carrying anyone's bag on 14 again", isMe: true },
+    { sender: 'TJ', text: "That was ONE TIME and your back was fine 💀", isMe: false },
+    { system: true, text: "⛳ COURSE INTEL · Greens running 11 on stimp this week per 8 ForeSome rounds", time: 'TODAY · 8:14 AM' },
+    { sender: 'KEITH', text: "11?? cool cool cool I'm gonna 4-putt every hole", isMe: false },
+    { sender: 'YOU', text: "Need one more — anyone know a 12 hcap who isn't allergic to fun?", isMe: true },
+    { sender: 'TJ', text: "Posted it to the KC feed. ForeSome bot says 3 matches in the area 👀", isMe: false },
+    { system: true, text: "🎯 1 PLAYER REQUESTED TO JOIN · Tap to review" }
+  ]);
+  const [chatInputText, setChatInputText] = useState('');
+
+  // Camera Scanning simulation state
+  const [isScanning, setIsScanning] = useState(false);
+  const [processingStep, setProcessingStep] = useState('Extracting course & scores');
+
+  // Review screen states (pre-filled with mockup scan results)
+  const [reviewCourse, setReviewCourse] = useState('Shoal Creek');
+  const [reviewTee, setReviewTee] = useState('Blue');
+  const [reviewDate, setReviewDate] = useState('2026-05-17');
+  const [reviewTotalPar, setReviewTotalPar] = useState(71);
+  // Default Shoal Creek review scores:
+  const [reviewScores, setReviewScores] = useState([4, 5, 3, 5, 5, 4, 6, 4, 5, 4, 4, 6, 5, 5, 3, 6, 4, 6]); 
+  const [reviewScoresTj, setReviewScoresTj] = useState([4, 6, 4, 4, 5, 3, 5, 5, 4, 5, 4, 6, 4, 4, 4, 5, 4, 6]);
+
+  // Auth setup useEffect
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) {
+        fetchProfile(session.user.id);
+        fetchRounds(session.user.id);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) {
+        fetchProfile(session.user.id);
+        fetchRounds(session.user.id);
+      } else {
+        setProfile(null);
+        setSavedRounds([]);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const fetchProfile = async (userId) => {
     try {
@@ -107,74 +177,10 @@ export default function App() {
     if (error) {
       console.error('Error loading rounds:', error);
     } else {
-      setSavedRounds((data || []).map(normalizeRound));
+      setSavedRounds(data || []);
     }
     setLoadingRounds(false);
   };
-
-  const fetchSnaps = async () => {
-    setLoadingSnaps(true);
-    const { data, error } = await supabase
-      .from('snaps')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) {
-      console.error('Error loading snaps:', error);
-    } else {
-      setSnapsList(data || []);
-    }
-    setLoadingSnaps(false);
-  };
-
-  const fetchAlerts = async (userId) => {
-    if (!userId) return;
-    setLoadingAlerts(true);
-    const { data, error } = await supabase
-      .from('alerts')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-    if (error) {
-      console.error('Error loading alerts:', error);
-    } else {
-      setAlertsList(data || []);
-    }
-    setLoadingAlerts(false);
-  };
-
-  // Auth setup useEffect
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) {
-        fetchProfile(session.user.id);
-        fetchRounds(session.user.id);
-        fetchAlerts(session.user.id);
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (session) {
-        fetchProfile(session.user.id);
-        fetchRounds(session.user.id);
-        fetchAlerts(session.user.id);
-      } else {
-        setProfile(null);
-        setSavedRounds([]);
-        setAlertsList([]);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  // Fetch community snaps when tab switches to snaps
-  useEffect(() => {
-    if (selectedNav === 'Snap') {
-      fetchSnaps();
-    }
-  }, [selectedNav]);
 
   const handleAuth = async () => {
     setAuthError('');
@@ -220,7 +226,7 @@ export default function App() {
           if (profileError) {
             console.error('Error saving profile:', profileError);
           }
-          Alert.alert('Registration Successful', 'Welcome to ForeSome!');
+          alert('Registration Successful! Welcome to ForeSome!');
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
@@ -238,1509 +244,1412 @@ export default function App() {
     }
   };
 
-  const handlePostSnap = async () => {
-    if (!snapContent) {
-      Alert.alert('Caption required', 'Please add a caption to share.');
-      return;
-    }
+  // Stats dashboard calculations
+  const totalRoundsCount = savedRounds.length;
+  const totalScores = savedRounds.reduce((acc, r) => acc + (r.summary?.score || 0), 0);
+  const totalPutts = savedRounds.reduce((acc, r) => acc + (r.summary?.putts || 0), 0);
+  const totalFir = savedRounds.reduce((acc, r) => acc + (r.summary?.fir || 0), 0);
+  const totalGir = savedRounds.reduce((acc, r) => acc + (r.summary?.gir || 0), 0);
 
-    try {
-      setAuthLoading(true);
-      const newSnap = {
-        user_id: session.user.id,
-        author_name: profile?.username || 'Golf Player',
-        content: snapContent,
-        image_bg_color: snapBgColor,
-        image_text: '⛳️ Foresome Community'
-      };
+  const avgScore = totalRoundsCount > 0 ? (totalScores / totalRoundsCount).toFixed(1) : '84.2';
+  const avgPutts = totalRoundsCount > 0 ? (totalPutts / totalRoundsCount).toFixed(1) : '32.4';
+  const avgFir = totalRoundsCount > 0 ? Math.round((totalFir / (totalRoundsCount * 18)) * 100) : 52;
+  const avgGir = totalRoundsCount > 0 ? Math.round((totalGir / (totalRoundsCount * 18)) * 100) : 41;
 
-      const { error } = await supabase.from('snaps').insert([newSnap]);
-      if (error) {
-        Alert.alert('Error sharing snap', error.message);
-      } else {
-        setSnapContent('');
-        setIsPostingSnap(false);
-        fetchSnaps();
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleAlertAction = async (alertId, newStatus) => {
-    try {
-      const { error } = await supabase
-        .from('alerts')
-        .update({ status: newStatus })
-        .eq('id', alertId);
-
-      if (error) {
-        Alert.alert('Error', error.message);
-      } else {
-        setAlertsList((prev) =>
-          prev.map((a) => (a.id === alertId ? { ...a, status: newStatus } : a))
-        );
-        Alert.alert('Success', `You have ${newStatus} the invite.`);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const roundSummary = holeScores.reduce(
-    (acc, hole) => {
-      const scoreValue = Number(hole.score);
-      const puttsValue = Number(hole.putts);
-      return {
-        score: acc.score + (Number.isFinite(scoreValue) ? scoreValue : 0),
-        putts: acc.putts + (Number.isFinite(puttsValue) ? puttsValue : 0),
-        fir: acc.fir + (hole.fir ? 1 : 0),
-        gir: acc.gir + (hole.gir ? 1 : 0)
-      };
-    },
-    { score: 0, putts: 0, fir: 0, gir: 0 }
-  );
-
-  const completedHoles = holeScores.filter(
-    (hole) => hole.score !== '' || hole.putts !== '' || hole.fir || hole.gir
-  ).length;
-
-  const saveRound = async () => {
+  // Quick entry save
+  const saveQuickRound = async () => {
     if (!session?.user) return;
 
-    const round = {
-      id: `${Date.now()}`,
+    const roundData = {
       user_id: session.user.id,
-      course_id: selectedCourseId,
-      course_name: selectedCourse.name,
-      tee: selectedTee,
-      created_at: new Date().toISOString(),
-      hole_scores: holeScores,
-      summary: roundSummary,
-      completed_holes: completedHoles
+      course_name: quickCourse,
+      tee: quickTee,
+      created_at: new Date(quickDate).toISOString(),
+      completed_holes: 18,
+      summary: {
+        score: Number(quickScore),
+        putts: Number(quickPutts),
+        fir: Number(quickFir),
+        gir: Number(quickGir)
+      },
+      hole_scores: Array.from({ length: 18 }, (_, index) => ({
+        hole: index + 1,
+        score: Math.round(Number(quickScore) / 18),
+        fir: index < Number(quickFir),
+        gir: index < Number(quickGir),
+        putts: index < Number(quickPutts) % 18 ? 2 : 1
+      }))
     };
 
-    const { data, error } = await supabase.from('rounds').insert([round]).select();
-
+    const { data, error } = await supabase.from('rounds').insert([roundData]).select();
     if (error) {
-      console.error('Error saving round:', error);
-      Alert.alert('Error saving round', error.message);
+      alert('Error saving round: ' + error.message);
+    } else {
+      alert('Round saved successfully!');
+      fetchRounds(session.user.id);
+      setScreen('stats'); // Go to Intel
+    }
+  };
+
+  // Manual tracker logic
+  const currentHoleData = holeScores[currentHole - 1];
+
+  const adjustScore = (delta) => {
+    const newScore = currentHoleData.score + delta;
+    if (newScore < 1 || newScore > 12) return;
+    setHoleScores(prev =>
+      prev.map(h => h.hole === currentHole ? { ...h, score: newScore } : h)
+    );
+  };
+
+  const setPutts = (n) => {
+    setHoleScores(prev =>
+      prev.map(h => h.hole === currentHole ? { ...h, putts: n } : h)
+    );
+  };
+
+  const toggleStat = (statName) => {
+    if (statName === 'fir' && SHOAL_CREEK_COURSE.pars[currentHole - 1] === 3) return;
+    setHoleScores(prev =>
+      prev.map(h => h.hole === currentHole ? { ...h, [statName]: !h[statName] } : h)
+    );
+  };
+
+  // Calculations for tracker running totals
+  const played = currentHole - 1;
+  let runningTotal = 0;
+  let runningPar = 0;
+  for (let i = 0; i < played; i++) {
+    runningTotal += Number(holeScores[i].score);
+    runningPar += SHOAL_CREEK_COURSE.pars[i];
+  }
+  const vsParDiff = runningTotal - runningPar;
+  const vsParText = played === 0 ? 'E' : (vsParDiff === 0 ? 'E' : (vsParDiff > 0 ? `+${vsParDiff}` : `${vsParDiff}`));
+
+  // Stepper score diff formatting
+  const currentPar = SHOAL_CREEK_COURSE.pars[currentHole - 1];
+  const currentDiff = currentHoleData.score - currentPar;
+  let stepperLabel = 'PAR';
+  let stepperResult = 'EVEN';
+  let stepperClass = 'score-result';
+  if (currentDiff <= -2) { stepperLabel = 'EAGLE'; stepperResult = `${currentDiff}`; stepperClass += ' eagle'; }
+  else if (currentDiff === -1) { stepperLabel = 'BIRDIE'; stepperResult = '−1'; stepperClass += ' birdie'; }
+  else if (currentDiff === 0) { stepperLabel = 'PAR'; stepperResult = 'EVEN'; }
+  else if (currentDiff === 1) { stepperLabel = 'BOGEY'; stepperResult = '+1'; stepperClass += ' bogey'; }
+  else if (currentDiff === 2) { stepperLabel = 'DOUBLE'; stepperResult = '+2'; stepperClass += ' double'; }
+  else if (currentDiff >= 3) { stepperLabel = `+${currentDiff}`; stepperResult = `+${currentDiff}`; stepperClass += ' double'; }
+
+  // Foursome score projection calculations
+  const youScore = played === 0 ? 0 : runningTotal;
+  const tjScore = played === 0 ? 0 : runningTotal + 1;
+  const keithScore = played === 0 ? 0 : runningTotal - 2;
+  const eScore = played === 0 ? 0 : runningTotal + 2;
+
+  const youDiff = vsParDiff;
+  const tjDiff = vsParDiff + 1;
+  const keithDiff = vsParDiff - 2;
+  const eDiff = vsParDiff + 2;
+
+  const getDiffText = (diff) => {
+    if (diff === 0) return 'E';
+    if (diff > 0) return `+${diff}`;
+    return `${diff}`;
+  };
+
+  const nextHole = () => {
+    if (currentHole === 18) {
+      setShowEor(true);
       return;
     }
+    setCurrentHole(prev => prev + 1);
+  };
 
-    const saved = data?.[0] ? normalizeRound(data[0]) : normalizeRound(round);
-    setSavedRounds((prev) => [saved, ...prev]);
-    setHoleScores(
-      Array.from({ length: 18 }, (_, index) => ({
+  const prevHole = () => {
+    if (currentHole === 1) return;
+    setCurrentHole(prev => prev - 1);
+  };
+
+  const saveManualRound = async () => {
+    if (!session?.user) return;
+
+    const totalScore = holeScores.reduce((acc, h) => acc + Number(h.score || 0), 0);
+    const totalPutts = holeScores.reduce((acc, h) => acc + Number(h.putts || 0), 0);
+    const totalFir = holeScores.reduce((acc, h) => acc + (h.fir ? 1 : 0), 0);
+    const totalGir = holeScores.reduce((acc, h) => acc + (h.gir ? 1 : 0), 0);
+
+    const roundData = {
+      user_id: session.user.id,
+      course_name: selectedCourse.name || 'Shoal Creek',
+      tee: selectedTee,
+      created_at: new Date().toISOString(),
+      completed_holes: 18,
+      summary: {
+        score: totalScore,
+        putts: totalPutts,
+        fir: totalFir,
+        gir: totalGir
+      },
+      hole_scores: holeScores
+    };
+
+    const { data, error } = await supabase.from('rounds').insert([roundData]).select();
+    if (error) {
+      alert('Error saving round: ' + error.message);
+    } else {
+      alert('Round saved successfully!');
+      fetchRounds(session.user.id);
+      // Reset manual tracker
+      setHoleScores(
+        Array.from({ length: 18 }, (_, index) => ({
+          hole: index + 1,
+          score: SHOAL_CREEK_COURSE.pars[index],
+          fir: false,
+          gir: false,
+          pen: false,
+          putts: 2
+        }))
+      );
+      setCurrentHole(1);
+      setShowEor(false);
+      setScreen('stats'); // Go to Intel
+    }
+  };
+
+  const eorChooseSnap = () => {
+    setShowEor(false);
+    if (isPro) {
+      setScreen('camera');
+    } else {
+      setScreen('paywall');
+    }
+  };
+
+  // Camera Scanning simulation
+  const startCameraScan = () => {
+    setIsScanning(true);
+    setProcessingStep('Extracting course & scores');
+    setTimeout(() => {
+      setProcessingStep('Verifying math...');
+      setTimeout(() => {
+        setIsScanning(false);
+        setScreen('review');
+      }, 1000);
+    }, 1500);
+  };
+
+  // Confirm review scan score updates
+  const updateReviewScore = (index, value) => {
+    setReviewScores(prev => prev.map((s, i) => i === index ? Number(value) : s));
+  };
+
+  const saveReviewRound = async () => {
+    if (!session?.user) return;
+
+    const totalScore = reviewScores.reduce((acc, s) => acc + Number(s || 0), 0);
+    // Mock review stats totals
+    const roundData = {
+      user_id: session.user.id,
+      course_name: reviewCourse,
+      tee: reviewTee,
+      created_at: new Date(reviewDate).toISOString(),
+      completed_holes: 18,
+      summary: {
+        score: totalScore,
+        putts: 31,
+        fir: 9,
+        gir: 8
+      },
+      hole_scores: reviewScores.map((s, index) => ({
         hole: index + 1,
-        score: '',
-        fir: false,
-        gir: false,
-        putts: ''
+        score: s,
+        fir: index % 2 === 0,
+        gir: index % 3 === 0,
+        putts: index % 5 === 0 ? 1 : 2
       }))
-    );
-    setScreen('home');
+    };
+
+    const { data, error } = await supabase.from('rounds').insert([roundData]).select();
+    if (error) {
+      alert('Error saving round: ' + error.message);
+    } else {
+      alert('Round saved successfully!');
+      fetchRounds(session.user.id);
+      setScreen('stats'); // Go to Intel
+    }
   };
 
-  const updateHole = (index, field, value) => {
-    setHoleScores((prev) =>
-      prev.map((hole, holeIndex) =>
-        holeIndex === index ? { ...hole, [field]: value } : hole
-      )
-    );
+  // Chat/Banter handlers
+  const sendChatText = () => {
+    if (!chatInputText.trim()) return;
+    setChatMessages(prev => [
+      ...prev,
+      { sender: 'YOU', text: chatInputText.trim(), isMe: true }
+    ]);
+    setChatInputText('');
   };
 
-  const nearestCourses = [...courses]
-    .filter((course) => course.distance_mi != null)
-    .sort((a, b) => Number(a.distance_mi) - Number(b.distance_mi))
-    .slice(0, 6);
+  const sendQuickChat = (text) => {
+    setChatMessages(prev => [
+      ...prev,
+      { sender: 'YOU', text: text, isMe: true }
+    ]);
+  };
 
-  const selectedCourse = courses.find((course) => course.id === selectedCourseId) || nearestCourses[0] || {};
-
-  // Performance calculations across completed rounds
-  const statsRounds = savedRounds.filter(r => r.summary && typeof r.summary.score === 'number' && r.completedHoles > 0);
-  const totalRoundsCount = statsRounds.length;
-
-  const avgScore = totalRoundsCount > 0
-    ? (statsRounds.reduce((sum, r) => sum + r.summary.score, 0) / totalRoundsCount).toFixed(1)
-    : '--';
-
-  const avgPutts = totalRoundsCount > 0
-    ? (statsRounds.reduce((sum, r) => sum + r.summary.putts, 0) / totalRoundsCount).toFixed(1)
-    : '--';
-
-  const totalCompletedHoles = statsRounds.reduce((sum, r) => sum + (r.completedHoles || 0), 0);
-  const totalGirCount = statsRounds.reduce((sum, r) => sum + (r.summary.gir || 0), 0);
-  const totalFirCount = statsRounds.reduce((sum, r) => sum + (r.summary.fir || 0), 0);
-
-  const avgGir = totalCompletedHoles > 0
-    ? Math.round((totalGirCount / totalCompletedHoles) * 100)
-    : '--';
-
-  const avgFir = totalCompletedHoles > 0
-    ? Math.round((totalFirCount / totalCompletedHoles)  // If no active session, show premium signup/login screen
+  // Auth screen render
   if (!session) {
     return (
-      <View style={styles.stage}>
-        <View style={styles.headerBar}>
-          <View style={styles.headerLeft}>
-            <View style={styles.dot} />
-            <Text style={styles.headerText}>KC Golf Community</Text>
-          </View>
-        </View>
+      <div className="stage">
+        <div className="header-bar">
+          <span><img src={foresomeLogo} alt="ForeSome" style={{ height: '28px', verticalAlign: 'middle' }} /></span>
+          <button className="toggle-pro" style={{ opacity: 0.5 }}>
+            <span>FREE USER</span>
+          </button>
+        </div>
+        <div className="phone">
+          <div className="notch"></div>
+          <div className="status-bar">
+            <span>8:42</span>
+            <div className="status-icons">
+              <span>●●●●●</span>
+              <span>5G</span>
+              <span>🔋</span>
+            </div>
+          </div>
+          
+          <div className="screen" style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', overflowY: 'auto' }}>
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <h1 style={{ fontFamily: 'var(--display)', fontSize: '32px', fontWeight: '900', color: 'var(--text)', marginTop: '24px' }}>
+                Welcome to <span style={{ color: 'var(--gold)', fontStyle: 'italic' }}>ForeSome</span>
+              </h1>
+              <p style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--text-dim)', marginTop: '6px' }}>
+                THE SOCIAL GOLF APP
+              </p>
+            </div>
 
-        <View style={styles.phone}>
-          <View style={styles.notch} />
-          <View style={styles.statusBar}>
-            <Text style={styles.statusText}>8:42</Text>
-            <View style={styles.statusIcons}>
-              <Text style={styles.iconText}>🔋</Text>
-              <Text style={styles.iconText}>📶</Text>
-              <Text style={styles.iconText}>☁️</Text>
-            </View>
-          </View>
-
-          <ScrollView style={styles.screen} contentContainerStyle={{ padding: 24, justifyContent: 'center', minHeight: '80%' }}>
-            <View style={{ alignItems: 'center', marginBottom: 28 }}>
-              <Text style={{ fontFamily: 'Playfair Display', fontSize: 36, fontWeight: '900', color: '#f1ead9' }}>
-                Fore<Text style={{ color: '#b89a5c', fontStyle: 'italic' }}>Some</Text>
-              </Text>
-              <Text style={{ fontSize: 9, letterSpacing: 2.5, textTransform: 'uppercase', color: '#c9bf9f', marginTop: 4 }}>
-                Golf Community
-              </Text>
-            </View>
-
-            <View style={{ flexDirection: 'row', backgroundColor: '#243d2c', borderRadius: 12, padding: 4, marginBottom: 20 }}>
-              <Pressable 
-                style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8, backgroundColor: authMode === 'login' ? '#1a2c20' : 'transparent' }}
-                onPress={() => { setAuthMode('login'); setAuthError(''); }}
+            <div style={{ display: 'flex', background: 'var(--bg-elevated)', borderRadius: '12px', padding: '4px', marginBottom: '20px' }}>
+              <button 
+                type="button"
+                className="nav-btn"
+                style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: authMode === 'login' ? 'var(--bg-card)' : 'transparent', color: authMode === 'login' ? 'var(--text)' : 'var(--text-dim)', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}
+                onClick={() => { setAuthMode('login'); setAuthError(''); }}
               >
-                <Text style={{ fontSize: 12, fontWeight: '700', color: authMode === 'login' ? '#f1ead9' : '#c9bf9f' }}>Log In</Text>
-              </Pressable>
-              <Pressable 
-                style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8, backgroundColor: authMode === 'signup' ? '#1a2c20' : 'transparent' }}
-                onPress={() => { setAuthMode('signup'); setAuthError(''); }}
+                Log In
+              </button>
+              <button 
+                type="button"
+                className="nav-btn"
+                style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: authMode === 'signup' ? 'var(--bg-card)' : 'transparent', color: authMode === 'signup' ? 'var(--text)' : 'var(--text-dim)', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}
+                onClick={() => { setAuthMode('signup'); setAuthError(''); }}
               >
-                <Text style={{ fontSize: 12, fontWeight: '700', color: authMode === 'signup' ? '#f1ead9' : '#c9bf9f' }}>Sign Up</Text>
-              </Pressable>
-            </View>
+                Sign Up
+              </button>
+            </div>
 
-            {authError ? (
-              <View style={{ backgroundColor: 'rgba(232, 138, 138, 0.15)', borderWidth: 1, borderColor: '#e88a8a', borderRadius: 10, padding: 12, marginBottom: 18 }}>
-                <Text style={{ color: '#e88a8a', fontSize: 12, lineHeight: 15 }}>{authError}</Text>
-              </View>
-            ) : null}
-
-            <View style={{ marginBottom: 14 }}>
-              <Text style={styles.inputLabel}>Email Address</Text>
-              <TextInput
-                style={[styles.input, { color: '#f1ead9', fontSize: 13, paddingVertical: 10 }]}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                placeholder="you@example.com"
-                placeholderTextColor="#8c8467"
-                value={email}
-                onChangeText={setEmail}
-              />
-            </View>
-
-            <View style={{ marginBottom: 14 }}>
-              <Text style={styles.inputLabel}>Password</Text>
-              <TextInput
-                style={[styles.input, { color: '#f1ead9', fontSize: 13, paddingVertical: 10 }]}
-                secureTextEntry
-                placeholder="••••••••"
-                placeholderTextColor="#8c8467"
-                value={password}
-                onChangeText={setPassword}
-              />
-            </View>
-
-            {authMode === 'signup' && (
-              <>
-                <View style={{ marginBottom: 14 }}>
-                  <Text style={styles.inputLabel}>Username / Name</Text>
-                  <TextInput
-                    style={[styles.input, { color: '#f1ead9', fontSize: 13, paddingVertical: 10 }]}
-                    placeholder="Keith M."
-                    placeholderTextColor="#8c8467"
-                    value={usernameInput}
-                    onChangeText={setUsernameInput}
-                  />
-                </View>
-
-                <View style={{ marginBottom: 14 }}>
-                  <Text style={styles.inputLabel}>Golf Handicap (HCP)</Text>
-                  <TextInput
-                    style={[styles.input, { color: '#f1ead9', fontSize: 13, paddingVertical: 10 }]}
-                    keyboardType="numeric"
-                    placeholder="12"
-                    placeholderTextColor="#8c8467"
-                    value={handicapInput}
-                    onChangeText={setHandicapInput}
-                  />
-                </View>
-              </>
+            {authError && (
+              <div style={{ background: 'rgba(232, 138, 138, 0.12)', border: '1px solid var(--danger)', borderRadius: '10px', padding: '12px', marginBottom: '18px', color: 'var(--danger)', fontSize: '12px', fontFamily: 'var(--body)' }}>
+                {authError}
+              </div>
             )}
 
-            <Pressable 
-              style={[styles.saveRoundBtn, { marginTop: 14, backgroundColor: '#b89a5c', opacity: authLoading ? 0.7 : 1 }]}
-              onPress={handleAuth}
-              disabled={authLoading}
-            >
-              <Text style={{ color: '#1a2c20', fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' }}>
-                {authLoading ? 'Please wait...' : authMode === 'login' ? 'Access Account' : 'Register Now'}
-              </Text>
-            </Pressable>
-          </ScrollView>
-        </View>
-      </View>
+            <div className="scorecard-form" style={{ padding: 0, border: 'none', background: 'transparent' }}>
+              <div className="form-field" style={{ marginBottom: '14px' }}>
+                <label>Email Address</label>
+                <input 
+                  type="email" 
+                  placeholder="you@example.com" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  style={{ width: '100%', height: '42px', borderRadius: '12px', border: '1px solid var(--border)', padding: '0 12px', background: 'var(--bg)', color: 'var(--text)', outline: 'none' }}
+                />
+              </div>
+
+              <div className="form-field" style={{ marginBottom: '14px' }}>
+                <label>Password</label>
+                <input 
+                  type="password" 
+                  placeholder="••••••••" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={{ width: '100%', height: '42px', borderRadius: '12px', border: '1px solid var(--border)', padding: '0 12px', background: 'var(--bg)', color: 'var(--text)', outline: 'none' }}
+                />
+              </div>
+
+              {authMode === 'signup' && (
+                <>
+                  <div className="form-field" style={{ marginBottom: '14px' }}>
+                    <label>Username / Name</label>
+                    <input 
+                      type="text" 
+                      placeholder="Keith M." 
+                      value={usernameInput}
+                      onChange={(e) => setUsernameInput(e.target.value)}
+                      style={{ width: '100%', height: '42px', borderRadius: '12px', border: '1px solid var(--border)', padding: '0 12px', background: 'var(--bg)', color: 'var(--text)', outline: 'none' }}
+                    />
+                  </div>
+
+                  <div className="form-field" style={{ marginBottom: '14px' }}>
+                    <label>Golf Handicap (HCP)</label>
+                    <input 
+                      type="number" 
+                      placeholder="12" 
+                      value={handicapInput}
+                      onChange={(e) => setHandicapInput(e.target.value)}
+                      style={{ width: '100%', height: '42px', borderRadius: '12px', border: '1px solid var(--border)', padding: '0 12px', background: 'var(--bg)', color: 'var(--text)', outline: 'none' }}
+                    />
+                  </div>
+                </>
+              )}
+
+              <button 
+                className="save-btn" 
+                onClick={handleAuth} 
+                disabled={authLoading}
+                style={{ width: '100%', marginTop: '10px' }}
+              >
+                {authLoading ? 'Connecting...' : authMode === 'login' ? 'ACCESS ACCOUNT' : 'REGISTER NOW'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 
+  // Active main view
   return (
-    <View style={styles.stage}>
-      <View style={styles.headerBar}>
-        <View style={styles.headerLeft}>
-          <View style={styles.dot} />
-          <Text style={styles.headerText}>KC Golf Community</Text>
-        </View>
-        <Pressable 
-          style={styles.togglePro}
-          onPress={() => {
-            Alert.alert(
-              'Sign Out',
-              'Are you sure you want to sign out?',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Sign Out', onPress: () => supabase.auth.signOut() }
-              ]
-            );
-          }}
+    <div className="stage" id="stage">
+      <div className="header-bar">
+        <span><img src={foresomeLogo} alt="ForeSome" style={{ height: '28px', verticalAlign: 'middle' }} /></span>
+        <button 
+          className={`toggle-pro ${isPro ? 'active' : ''}`} 
+          id="proToggle"
+          onClick={() => setIsPro(prev => !prev)}
         >
-          <Text style={styles.toggleProText}>Sign Out</Text>
-        </Pressable>
-      </View>
+          <span id="proLabel">{isPro ? 'PRO USER' : 'FREE USER'}</span>
+        </button>
+      </div>
 
-      <View style={styles.phone}>
-        <View style={styles.notch} />
-        <View style={styles.statusBar}>
-          <Text style={styles.statusText}>8:42</Text>
-          <View style={styles.statusIcons}>
-            <Text style={styles.iconText}>🔋</Text>
-            <Text style={styles.iconText}>📶</Text>
-            <Text style={styles.iconText}>☁️</Text>
-          </View>
-        </View>
+      <div className="toggle-hint" id="toggleHint">↑ TAP TO TOGGLE FREE / PRO</div>
 
-        {screen === 'scorecard' ? (
-          <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
-            <View style={styles.scorecardHeader}>
-              <Pressable style={styles.backBtn} onPress={() => setScreen('home')}>
-                <Text style={styles.backBtnText}>Back</Text>
-              </Pressable>
-              <View>
-                <Text style={styles.screenTitle}>{selectedCourse.name || 'Round scorecard'}</Text>
-                <Text style={styles.screenSubtitle}>Tee {selectedTee} · {selectedCourse.city}</Text>
-              </View>
-            </View>
+      <div className="phone">
+        <div className="notch"></div>
 
-            {holeScores.map((hole, index) => (
-              <View key={hole.hole} style={styles.holeRow}>
-                <View style={styles.holeMeta}>
-                  <Text style={styles.holeLabel}>Hole {hole.hole}</Text>
-                  <Text style={styles.holePar}>Par 4</Text>
-                </View>
-                <View style={styles.scoreInputsRow}>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Score</Text>
-                    <TextInput
-                      style={styles.input}
-                      keyboardType="numeric"
-                      value={hole.score}
-                      onChangeText={(text) => updateHole(index, 'score', text)}
-                    />
-                  </View>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Putts</Text>
-                    <TextInput
-                      style={styles.input}
-                      keyboardType="numeric"
-                      value={hole.putts}
-                      onChangeText={(text) => updateHole(index, 'putts', text)}
-                    />
-                  </View>
-                </View>
-                <View style={styles.toggleRow}>
-                  <Pressable
-                    style={[styles.toggleChip, hole.fir && styles.toggleChipActive]}
-                    onPress={() => updateHole(index, 'fir', !hole.fir)}
+        <div className="status-bar">
+          <span id="statusTime">12:16</span>
+          <div className="status-icons">
+            <span>●●●●●</span>
+            <span>5G</span>
+            <span>🔋</span>
+          </div>
+        </div>
+
+        {/* ============== TEES SCREEN (HOME) ============== */}
+        <div className={`screen ${screen === 'home' ? '' : 'hidden'}`} id="home-screen">
+          <div className="app-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <img src={foresomeLogo} alt="ForeSome" className="app-header-logo" />
+              <div>
+                <div className="app-title">ForeSome</div>
+                <div className="app-subtitle">THE SOCIAL GOLF APP</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div 
+                className="avatar" 
+                id="avatar"
+                title="Click to sign out"
+                onClick={() => { if(confirm("Are you sure you want to sign out?")) supabase.auth.signOut(); }}
+              >
+                {profile?.initials || 'RQ'}
+              </div>
+              {isPro && <div className="pro-badge-top">PRO</div>}
+              <button 
+                className="logout-btn"
+                onClick={() => { if(confirm("Are you sure you want to sign out?")) supabase.auth.signOut(); }}
+              >
+                ↪ OUT
+              </button>
+            </div>
+          </div>
+
+          <div className="section-head">
+            <span className="section-title">▸ Next Up · Tap to open Banter</span>
+          </div>
+
+          <div className="hero-card" onClick={() => setScreen('chat')}>
+            <div className="hero-eyebrow">NEXT UP · SATURDAY FOURSOME</div>
+            <div className="hero-title" id="heroTitle">
+              Saturday at Shoal Creek<br />Looking for 1 more
+            </div>
+            <div className="hero-meta">
+              <span className="hero-time">7:42 AM</span>
+              <span className="hero-players">3 / 4 filled</span>
+              <span className="hero-hcap">HCP 8–14</span>
+            </div>
+          </div>
+
+          <div className="section-head">
+            <span className="section-title">▸ Open Tee Times · Near You</span>
+            <span className="section-link">VIEW ALL →</span>
+          </div>
+
+          <div className="course-search-wrap" ref={courseSearchRef}>
+            <input
+              type="text"
+              className="course-search-input"
+              placeholder="Search courses near you…"
+              value={courseSearchQuery}
+              onChange={(e) => { setCourseSearchQuery(e.target.value); setCourseSearchOpen(true); }}
+              onFocus={() => setCourseSearchOpen(true)}
+            />
+            {courseSearchOpen && courseSearchQuery.length > 0 && (
+              <div className="course-search-dropdown">
+                {filteredCourses.length === 0 ? (
+                  <div className="course-search-empty">No courses found</div>
+                ) : filteredCourses.map(c => (
+                  <div
+                    key={c.id}
+                    className="course-search-item"
+                    onClick={() => {
+                      setSelectedCourse(c);
+                      setCourseSearchQuery('');
+                      setCourseSearchOpen(false);
+                      setScreen('log');
+                    }}
                   >
-                    <Text style={[styles.toggleText, hole.fir && styles.toggleTextActive]}>FIR</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.toggleChip, hole.gir && styles.toggleChipActive]}
-                    onPress={() => updateHole(index, 'gir', !hole.gir)}
-                  >
-                    <Text style={[styles.toggleText, hole.gir && styles.toggleTextActive]}>GIR</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
+                    <div className="course-search-name">{c.name}</div>
+                    <div className="course-search-meta">{c.type} · {c.city}, {c.state} · {c.distance_mi} mi</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-            <Pressable style={styles.saveRoundBtn} onPress={saveRound}>
-              <Text style={styles.saveRoundText}>Save round</Text>
-            </Pressable>
-          </ScrollView>
-        ) : selectedNav === 'Stats' ? (
-          <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
-            <View style={styles.statsHeader}>
-              <Text style={styles.statsTitle}>Performance Dashboard</Text>
-              <Text style={styles.statsSubtitle}>Overall analysis across {totalRoundsCount} rounds</Text>
-            </View>
+          <div className="card-list">
+            <div className="tee-card" onClick={() => { setSelectedCourse(courses.find(c => c.name.includes("Swope")) || courses[0]); setScreen('log'); }}>
+              <div className="card-header">
+                <div>
+                  <div className="course-name">Swope Memorial</div>
+                  <div className="course-meta">PUBLIC · PAR 71 · KC, MO</div>
+                </div>
+                <div className="card-time-block">
+                  <div className="tee-time">9:18 AM</div>
+                  <div className="tee-date">SAT MAY 23</div>
+                </div>
+              </div>
+              <div className="card-divider"></div>
+              <div className="footer">
+                <div className="players">
+                  <div className="player-dot filled">TJ</div>
+                  <div className="player-dot filled">K</div>
+                  <div className="player-dot empty">+</div>
+                  <div className="player-dot empty">+</div>
+                </div>
+                <span className="hcap-badge">HCP 6–18</span>
+              </div>
+            </div>
 
-            <View style={styles.statsGrid}>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{avgScore}</Text>
-                <Text style={styles.statLabel}>Avg Score</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{avgPutts}</Text>
-                <Text style={styles.statLabel}>Avg Putts</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{avgGir !== '--' ? `${avgGir}%` : '--'}</Text>
-                <Text style={styles.statLabel}>GIR %</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{avgFir !== '--' ? `${avgFir}%` : '--'}</Text>
-                <Text style={styles.statLabel}>FIR %</Text>
-              </View>
-            </View>
+            <div className="tee-card" onClick={() => { setSelectedCourse(courses.find(c => c.name.includes("Heart")) || courses[0]); setScreen('log'); }}>
+              <div className="card-header">
+                <div>
+                  <div className="course-name">Heart of America</div>
+                  <div className="course-meta">PUBLIC · PAR 72 · KC, MO</div>
+                </div>
+                <div className="card-time-block">
+                  <div className="tee-time">2:04 PM</div>
+                  <div className="tee-date">SUN MAY 24</div>
+                </div>
+              </div>
+              <div className="card-divider"></div>
+              <div className="footer">
+                <div className="players">
+                  <div className="player-dot filled">E</div>
+                  <div className="player-dot empty">+</div>
+                  <div className="player-dot empty">+</div>
+                  <div className="player-dot empty">+</div>
+                </div>
+                <span className="hcap-badge">OPEN HCP</span>
+              </div>
+            </div>
 
-            <View style={styles.section}>
-              <View style={styles.sectionHead}>
-                <Text style={styles.sectionTitle}>Round History</Text>
-              </View>
-              {savedRounds.length === 0 ? (
-                <Text style={styles.emptyText}>No rounds recorded yet. Record a round to see history.</Text>
-              ) : (
-                savedRounds.map((round) => (
-                  <View key={round.id} style={styles.historyCard}>
-                    <View style={styles.historyRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.historyCourse} numberOfLines={1}>{round.courseName}</Text>
-                        <Text style={styles.historyMeta}>{round.tee} tees · {new Date(round.createdAt).toLocaleDateString()}</Text>
-                      </View>
-                      <View style={styles.historyScoreContainer}>
-                        <Text style={styles.historyScoreValue}>{round.summary.score}</Text>
-                        <Text style={styles.historyScoreLabel}>Strokes</Text>
-                      </View>
-                    </View>
-                    <View style={styles.historyStats}>
-                      <View style={styles.historyStatBlock}>
-                        <Text style={styles.historyStatVal}>{round.summary.putts}</Text>
-                        <Text style={styles.historyStatLbl}>Putts</Text>
-                      </View>
-                      <View style={styles.historyStatBlock}>
-                        <Text style={styles.historyStatVal}>{round.summary.fir}</Text>
-                        <Text style={styles.historyStatLbl}>FIR</Text>
-                      </View>
-                      <View style={styles.historyStatBlock}>
-                        <Text style={styles.historyStatVal}>{round.summary.gir}</Text>
-                        <Text style={styles.historyStatLbl}>GIR</Text>
-                      </View>
-                    </View>
-                  </View>
-                ))
-              )}
-            </View>
-          </ScrollView>
-        ) : selectedNav === 'Snap' ? (
-          <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
-            <View style={styles.statsHeader}>
-              <Text style={styles.statsTitle}>Community Snaps</Text>
-              <Text style={styles.statsSubtitle}>Moments from the Kansas City Golf Community</Text>
-            </View>
+            <div className="tee-card" onClick={() => { setSelectedCourse(courses.find(c => c.name.includes("Tiffany")) || courses[0]); setScreen('log'); }}>
+              <div className="card-header">
+                <div>
+                  <div className="course-name">Tiffany Greens</div>
+                  <div className="course-meta">SEMI-PRIVATE · PAR 71 · KC, MO</div>
+                </div>
+                <div className="card-time-block">
+                  <div className="tee-time">7:00 AM</div>
+                  <div className="tee-date">MON MAY 25</div>
+                </div>
+              </div>
+              <div className="card-divider"></div>
+              <div className="footer">
+                <div className="players">
+                  <div className="player-dot filled">M</div>
+                  <div className="player-dot filled">J</div>
+                  <div className="player-dot filled">S</div>
+                  <div className="player-dot empty">+</div>
+                </div>
+                <span className="hcap-badge">HCP 0–10</span>
+              </div>
+            </div>
+          </div>
 
-            {isPostingSnap ? (
-              <View style={[styles.scorecardForm, { marginHorizontal: 16, marginBottom: 16 }]}>
-                <Text style={[styles.inputLabel, { color: '#b89a5c', fontSize: 13, marginBottom: 10 }]}>Share your Golf Snap</Text>
-                
-                <View style={{ marginBottom: 14 }}>
-                  <Text style={styles.inputLabel}>Caption / Text</Text>
-                  <TextInput
-                    style={[styles.input, { color: '#f1ead9', fontSize: 12, height: 60, textAlignVertical: 'top' }]}
-                    multiline
-                    numberOfLines={3}
-                    placeholder="Sunrise was great today at Swope Memorial GC!"
-                    placeholderTextColor="#8c8467"
-                    value={snapContent}
-                    onChangeText={setSnapContent}
-                  />
-                </View>
+          <div className="footer-note">
+            <div>THE SOCIAL GOLF APP · <span className="accent">FOR ALL GOLFERS</span></div>
+          </div>
+        </div>
 
-                <View style={{ marginBottom: 14 }}>
-                  <Text style={styles.inputLabel}>Background Card Color</Text>
-                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 6, marginBottom: 6 }}>
-                    {['#2e4936', '#b89a5c', '#1a2c20', '#243d2c'].map((color) => (
-                      <Pressable
-                        key={color}
-                        style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: 16,
-                          backgroundColor: color,
-                          borderWidth: snapBgColor === color ? 2 : 0,
-                          borderColor: '#f1ead9'
+        {/* ============== LOG SCREEN ============== */}
+        <div className={`screen ${screen === 'log' ? '' : 'hidden'}`} id="log-screen">
+          <div style={{ padding: '16px 16px 0' }}>
+            <button className="back-btn" onClick={() => setScreen('home')}>← BACK</button>
+          </div>
+          <div className="screen-title">Log Round</div>
+          <div className="screen-subtitle">CHOOSE ENTRY METHOD</div>
+
+          <div className="log-method">
+            <div className="method-card" onClick={() => setScreen('tracker')}>
+              <div className="method-icon">✍️</div>
+              <div className="method-name">Hole by Hole</div>
+              <div className="method-desc">Log each hole as you play</div>
+            </div>
+            <div className="method-card" onClick={() => {
+              const el = document.querySelector('.scorecard-form');
+              if (el) el.scrollIntoView({ behavior: 'smooth' });
+            }}>
+              <div className="method-icon">⚡</div>
+              <div className="method-name">Quick Entry</div>
+              <div className="method-desc">Just totals — fill in below</div>
+            </div>
+          </div>
+
+          <div style={{ margin: '6px 0 14px', padding: '10px 14px', background: 'rgba(184, 154, 92, 0.08)', border: '1px solid var(--gold-deep)', borderRadius: '10px', display: 'flex', alignHTMLs: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '16px' }}>📸</span>
+            <div style={{ flex: 1, fontFamily: 'var(--body)', fontSize: '12px', color: 'var(--text-dim)', lineHeight: 1.3 }}>
+              <b style={{ color: 'var(--cream)' }}>Snap Card unlocks at end of round.</b> Log hole-by-hole, then verify your scorecard photo with Pro.
+            </div>
+          </div>
+
+          <div className="scorecard-form">
+            <div className="form-row">
+              <div className="form-field" ref={quickCourseSearchRef} style={{ position: 'relative' }}>
+                <label>Course</label>
+                <input
+                  type="text"
+                  className="course-search-input-sm"
+                  placeholder="Type to search…"
+                  value={quickCourseSearchOpen ? quickCourseSearchQuery : quickCourse}
+                  onChange={(e) => { setQuickCourseSearchQuery(e.target.value); setQuickCourseSearchOpen(true); }}
+                  onFocus={() => { setQuickCourseSearchQuery(''); setQuickCourseSearchOpen(true); }}
+                />
+                {quickCourseSearchOpen && (
+                  <div className="course-search-dropdown course-search-dropdown-sm">
+                    {filteredQuickCourses.length === 0 ? (
+                      <div className="course-search-empty">No courses found</div>
+                    ) : filteredQuickCourses.map(c => (
+                      <div
+                        key={c.id}
+                        className="course-search-item"
+                        onClick={() => {
+                          setQuickCourse(c.name);
+                          setQuickCourseSearchQuery('');
+                          setQuickCourseSearchOpen(false);
+                          setSelectedCourse(c);
                         }}
-                        onPress={() => setSnapBgColor(color)}
-                      />
+                      >
+                        <div className="course-search-name">{c.name}</div>
+                        <div className="course-search-meta">{c.type} · {c.city}, {c.state}</div>
+                      </div>
                     ))}
-                  </View>
-                </View>
+                  </div>
+                )}
+              </div>
+              <div className="form-field">
+                <label>Tees</label>
+                <select value={quickTee} onChange={(e) => setQuickTee(e.target.value)}>
+                  <option>Blue</option>
+                  <option>White</option>
+                  <option>Black</option>
+                  <option>Red</option>
+                </select>
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-field">
+                <label>Date</label>
+                <input type="date" value={quickDate} onChange={(e) => setQuickDate(e.target.value)} />
+              </div>
+              <div className="form-field">
+                <label>Total Score</label>
+                <input type="number" value={quickScore} onChange={(e) => setQuickScore(e.target.value)} />
+              </div>
+            </div>
 
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <Pressable style={[styles.saveRoundBtn, { flex: 1, marginVertical: 0 }]} onPress={handlePostSnap}>
-                    <Text style={styles.saveRoundText}>Share</Text>
-                  </Pressable>
-                  <Pressable style={[styles.saveRoundBtn, { flex: 1, backgroundColor: 'transparent', borderWidth: 1, borderColor: '#335041', marginVertical: 0 }]} onPress={() => setIsPostingSnap(false)}>
-                    <Text style={[styles.saveRoundText, { color: '#c9bf9f' }]}>Cancel</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ) : (
-              <Pressable style={styles.snapPostBtn} onPress={() => setIsPostingSnap(true)}>
-                <Text style={styles.snapPostBtnText}>📸 Share your Golf Snap</Text>
-              </Pressable>
-            )}
+            <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '0.1em', color: 'var(--text-faint)', textTransform: 'uppercase', margin: '8px 0' }}>▸ Stats (Optional)</div>
 
-            {loadingSnaps ? (
-              <Text style={styles.emptyText}>Loading community snaps…</Text>
-            ) : snapsList.length === 0 ? (
-              <Text style={styles.emptyText}>No community snaps yet. Be the first to share one!</Text>
-            ) : (
-              snapsList.map((snap) => (
-                <View key={snap.id} style={styles.snapCard}>
-                  <View style={styles.snapHeader}>
-                    <Text style={styles.snapAuthor}>{snap.author_name}</Text>
-                    <Text style={styles.snapTime}>{new Date(snap.created_at).toLocaleDateString()}</Text>
-                  </View>
-                  <Text style={styles.snapText}>{snap.content}</Text>
-                  {snap.image_url ? (
-                    <View style={[styles.snapImage, { backgroundColor: '#1e3527' }]}>
-                      <Text style={styles.snapImageText}>📷 Shared Photo</Text>
-                    </View>
-                  ) : (
-                    <View style={[styles.snapImage, { backgroundColor: snap.image_bg_color || '#2e4936' }]}>
-                      <Text style={styles.snapImageText}>{snap.image_text || '⛳️ ForeSome'}</Text>
-                    </View>
-                  )}
-                </View>
-              ))
-            )}
-          </ScrollView>
-        ) : selectedNav === 'Alerts' ? (
-          <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
-            <View style={styles.statsHeader}>
-              <Text style={styles.statsTitle}>Alerts & Invites</Text>
-              <Text style={styles.statsSubtitle}>Stay connected with your foursomes</Text>
-            </View>
+            <div className="stat-grid">
+              <div className="stat-input">
+                <label>FIR</label>
+                <input type="number" value={quickFir} onChange={(e) => setQuickFir(e.target.value)} />
+              </div>
+              <div className="stat-input">
+                <label>GIR</label>
+                <input type="number" value={quickGir} onChange={(e) => setQuickGir(e.target.value)} />
+              </div>
+              <div className="stat-input">
+                <label>Putts</label>
+                <input type="number" value={quickPutts} onChange={(e) => setQuickPutts(e.target.value)} />
+              </div>
+            </div>
 
-            {loadingAlerts ? (
-              <Text style={styles.emptyText}>Loading alerts…</Text>
-            ) : alertsList.length === 0 ? (
-              <Text style={styles.emptyText}>No active alerts or invitations at this time.</Text>
-            ) : (
-              alertsList.map((alert) => (
-                <View key={alert.id} style={styles.alertCard}>
-                  <View style={styles.alertHeader}>
-                    <Text style={styles.alertTitle}>{alert.title}</Text>
-                    <Text style={styles.alertTime}>{new Date(alert.created_at).toLocaleDateString()}</Text>
-                  </View>
-                  <Text style={styles.alertBody}>{alert.body}</Text>
-                  {alert.type === 'invitation' && alert.status === 'pending' && (
-                    <View style={styles.alertActions}>
-                      <Pressable style={styles.alertButtonAccept} onPress={() => handleAlertAction(alert.id, 'accepted')}>
-                        <Text style={styles.alertButtonTextAccept}>Accept</Text>
-                      </Pressable>
-                      <Pressable style={styles.alertButtonDecline} onPress={() => handleAlertAction(alert.id, 'declined')}>
-                        <Text style={styles.alertButtonTextDecline}>Decline</Text>
-                      </Pressable>
-                    </View>
-                  )}
-                  {alert.type === 'invitation' && alert.status !== 'pending' && (
-                    <Text style={[styles.alertTime, { marginTop: 6, fontStyle: 'italic', textTransform: 'capitalize' }]}>
-                      Status: {alert.status}
-                    </Text>
-                  )}
-                </View>
-              ))
-            )}
-          </ScrollView>
-        ) : (
-          <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
-            {/* User Greeting Section */}
-            <View style={{ paddingHorizontal: 16, marginTop: 16, marginBottom: 4, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ fontSize: 18, color: '#f1ead9', fontFamily: 'Playfair Display', fontWeight: 'bold' }}>
-                Hey, {profile?.username || 'Golf Player'}!
-              </Text>
-              <View style={{ backgroundColor: '#243d2c', borderWidth: 1, borderColor: '#b89a5c', borderRadius: 8, paddingVertical: 4, paddingHorizontal: 8 }}>
-                <Text style={{ fontSize: 9, color: '#b89a5c', fontWeight: '700', letterSpacing: 0.5 }}>
-                  HCP {profile?.handicap !== undefined ? profile.handicap : '12'}
-                </Text>
-              </View>
-            </View>
+            <button className="save-btn" onClick={saveQuickRound}>SAVE ROUND</button>
+          </div>
 
-            <View style={styles.hero}>
-              <Text style={styles.heroLabel}>Selected course</Text>
-              <Text style={styles.heroTitle}>{selectedCourse.name || 'Select a course'}</Text>
-              <Text style={styles.heroSubtitle} numberOfLines={2}>
-                {selectedCourse.city}, {selectedCourse.state} · {selectedCourse.type}
-              </Text>
-              <View style={styles.heroStats}>
-                <Text style={styles.heroStatText}>
-                  <Text style={styles.heroStatValue}>{selectedCourse.par || '--'}</Text par
-                </Text>
-                <Text style={styles.heroStatText}>
-                  <Text style={styles.heroStatValue}>
-                    {selectedCourse.distance_mi != null ? selectedCourse.distance_mi.toFixed(1) : '--'}
-                  </Text>{' '}
-                  miles away
-                </Text>
-              </View>
-            </View>
+          <div className="teaser" id="teaser">
+            <div className="teaser-label">▸ ONE INSIGHT FROM PRO</div>
+            <div className="teaser-text">
+              Golfers in your handicap range average <b>32.4 putts</b> at Shoal Creek. You averaged <b>34.1</b> last 3 rounds here. <br />
+              <span style={{ color: 'var(--gold)', fontWeight: 600 }}>Unlock full course intel with Pro →</span>
+            </div>
+          </div>
+        </div>
 
-            <View style={styles.section}>
-              <View style={styles.sectionHead}>
-                <Text style={styles.sectionTitle}>Nearby courses</Text>
-                <Text style={styles.sectionLink}>See all</Text>
-              </View>
-              {nearestCourses.map((course) => (
-                <Pressable
-                  key={course.id}
-                  style={[styles.courseCard, selectedCourseId === course.id && styles.courseCardActive]}
-                  onPress={() => setSelectedCourseId(course.id)}
+        {/* ============== TRACKER SCREEN ============== */}
+        <div className={`screen ${screen === 'tracker' ? '' : 'hidden'}`} id="tracker-screen" style={{ paddingBottom: 0 }}>
+          <div className="track-header">
+            <div className="track-course">
+              <b id="trackerCourse">{selectedCourse?.name?.toUpperCase() || 'SHOAL CREEK'}</b> · {selectedTee.toUpperCase()} · MAY 17
+            </div>
+            <button className="track-exit" onClick={() => setScreen('home')}>SAVE & EXIT</button>
+          </div>
+
+          <div className="hole-progress" id="holeProgress">
+            {holeScores.map((h, i) => (
+              <div 
+                key={h.hole} 
+                className={`hole-dot ${i + 1 < currentHole ? 'done' : ''} ${i + 1 === currentHole ? 'current' : ''}`}
+              />
+            ))}
+          </div>
+
+          <div className="running-total">
+            <span>HOLE <b id="trackHoleNum">{currentHole}</b> / 18</span>
+            <span>RUNNING <b id="trackRunning">{runningTotal || '—'}</b> <span className={`vs-par ${vsParDiff > 0 ? 'over' : ''}`} id="trackVsPar">{vsParText}</span></span>
+            <span>THRU <b id="trackThru">{played}</b></span>
+          </div>
+
+          <div className="hole-hero hole-hero-split">
+            <h3 className="hole-title-center" id="trackHoleBig">Hole {currentHole}</h3>
+            <div className="hole-info-row">
+              <div className="hole-info-left">
+                <div className="hole-info-value" id="trackPar">PAR {currentPar}</div>
+              </div>
+              <div className="hole-info-right">
+                <div className="hole-info-value" id="trackYards">{SHOAL_CREEK_COURSE.yards[currentHole - 1]} YDS</div>
+                <div className="hole-info-sub" id="trackHcp">HCP {SHOAL_CREEK_COURSE.hcps[currentHole - 1]}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="score-stepper-wrap">
+            <div className="score-stepper-label">Your Score</div>
+            <div className="score-stepper">
+              <button className="stepper-btn" onClick={() => adjustScore(-1)}>−</button>
+              <div className="stepper-display">
+                <div className="score-val" id="trackScore">{currentHoleData.score}</div>
+                <div className="score-label" id="trackScoreLabel">{stepperLabel}</div>
+              </div>
+              <button className="stepper-btn" onClick={() => adjustScore(1)}>+</button>
+            </div>
+            <div className={stepperClass} id="trackResult">{stepperResult}</div>
+          </div>
+
+          <div className="stat-toggle-row">
+            <div 
+              className={`stat-toggle ${currentPar === 3 ? 'disabled' : ''} ${currentHoleData.fir ? 'active' : ''}`} 
+              id="firToggle" 
+              onClick={() => toggleStat('fir')}
+            >
+              <div className="toggle-icon">🎯</div>
+              <div className="toggle-label">FIR</div>
+              <div className="toggle-sub">Fairway hit</div>
+            </div>
+            <div 
+              className={`stat-toggle ${currentHoleData.gir ? 'active' : ''}`} 
+              id="girToggle" 
+              onClick={() => toggleStat('gir')}
+            >
+              <div className="toggle-icon">⛳</div>
+              <div className="toggle-label">GIR</div>
+              <div className="toggle-sub">Green in reg</div>
+            </div>
+            <div 
+              className={`stat-toggle ${currentHoleData.pen ? 'active' : ''}`} 
+              id="penToggle" 
+              onClick={() => toggleStat('pen')}
+            >
+              <div className="toggle-icon">💧</div>
+              <div className="toggle-label">PENALTY</div>
+              <div className="toggle-sub">Hazard/OB</div>
+            </div>
+          </div>
+
+          <div className="putts-row">
+            <div className="pr-label">Putts</div>
+            <div className="putts-stepper">
+              {[0, 1, 2, 3, 4].map((n) => (
+                <div 
+                  key={n} 
+                  className={`putt-pill ${currentHoleData.putts === n ? 'active' : ''}`} 
+                  onClick={() => setPutts(n)}
                 >
-                  <View style={styles.courseCardRow}>
-                    <View style={styles.courseInfo}>
-                      <Text style={styles.courseCardTitle}>{course.name}</Text>
-                      <Text style={styles.courseCardMeta}>{course.city} · {course.type}</Text>
-                    </View>
-                    <Text style={styles.courseDistance}>{course.distance_mi?.toFixed(1)} mi</Text>
-                  </View>
-                </Pressable>
+                  {n === 4 ? '4+' : n}
+                </div>
               ))}
-            </View>
+            </div>
+          </div>
 
-            <View style={styles.section}>
-              <View style={styles.sectionHead}>
-                <Text style={styles.sectionTitle}>Round setup</Text>
-                <Text style={styles.sectionLink}>Edit</Text>
-              </View>
-              <Text style={styles.sectionSubtitle}>Pick the tee set for this round before you start logging hole-by-hole.</Text>
-              <View style={styles.teeOptionsRow}>
-                {teeOptions.map((tee) => {
-                  const active = selectedTee === tee;
-                  return (
-                    <Pressable
-                      key={tee}
-                      style={[styles.teeOption, active && styles.teeOptionActive]}
-                      onPress={() => setSelectedTee(tee)}
-                    >
-                      <Text style={[styles.teeOptionText, active && styles.teeOptionTextActive]}>{tee}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <Pressable style={styles.startRoundBtn} onPress={() => setScreen('scorecard')}>
-                <Text style={styles.startRoundText}>Start round on {selectedTee} tees</Text>
-              </Pressable>
-            </View>
+          <div className="foursome-scores">
+            <div className="fs-chip you">
+              <div className="fs-name">You</div>
+              <div className="fs-score">{youScore}</div>
+              <div className="fs-thru">{getDiffText(youDiff)} thru {played}</div>
+            </div>
+            <div className="fs-chip">
+              <div className="fs-name">TJ</div>
+              <div className="fs-score">{tjScore}</div>
+              <div className="fs-thru">{getDiffText(tjDiff)} thru {played}</div>
+            </div>
+            <div className="fs-chip">
+              <div className="fs-name">Keith</div>
+              <div className="fs-score">{keithScore}</div>
+              <div className="fs-thru">{getDiffText(keithDiff)} thru {played}</div>
+            </div>
+            <div className="fs-chip">
+              <div className="fs-name">E</div>
+              <div className="fs-score">{eScore}</div>
+              <div className="fs-thru">{getDiffText(eDiff)} thru {played}</div>
+            </div>
+          </div>
 
-            <View style={styles.section}>
-              <View style={styles.sectionHead}>
-                <Text style={styles.sectionTitle}>Latest saved round</Text>
-                <Pressable onPress={() => fetchRounds(session?.user?.id)} style={styles.refreshButton}>
-                  <Text style={styles.sectionLink}>{loadingRounds ? 'Refreshing…' : 'Refresh'}</Text>
-                </Pressable>
-              </View>
-              {loadingRounds ? (
-                <Text style={styles.emptyText}>Loading saved rounds…</Text>
-              ) : savedRounds.length === 0 ? (
-                <Text style={styles.emptyText}>No rounds saved yet. Save one to see summary here.</Text>
-              ) : (
-                <View style={styles.roundSummaryCard}>
-                  <Text style={styles.summaryLabel}>{savedRounds[0].courseName}</Text>
-                  <Text style={styles.summaryMeta}>{savedRounds[0].tee} tees · {new Date(savedRounds[0].createdAt).toLocaleDateString()}</Text>
-                  <View style={styles.summaryStatsRow}>
-                    <View style={styles.summaryStatBlock}>
-                      <Text style={styles.summaryStatValue}>{savedRounds[0].summary.score}</Text>
-                      <Text style={styles.summaryStatLabel}>Strokes</Text>
-                    </View>
-                    <View style={styles.summaryStatBlock}>
-                      <Text style={styles.summaryStatValue}>{savedRounds[0].summary.putts}</Text>
-                      <Text style={styles.summaryStatLabel}>Putts</Text>
-                    </View>
-                    <View style={styles.summaryStatBlock}>
-                      <Text style={styles.summaryStatValue}>{savedRounds[0].summary.fir}</Text>
-                      <Text style={styles.summaryStatLabel}>FIR</Text>
-                    </View>
-                    <View style={styles.summaryStatBlock}>
-                      <Text style={styles.summaryStatValue}>{savedRounds[0].summary.gir}</Text>
-                      <Text style={styles.summaryStatLabel}>GIR</Text>
-                    </View>
-                  </View>
-                </View>
-              )}
-            </View>
+          <div className="pro-nudge" onClick={() => setScreen('paywall')}>
+            <span className="nudge-icon">📸</span>
+            <div className="nudge-text">
+              Tired of tapping after every hole? <b>Snap the card at the end with Pro.</b>
+            </div>
+            <span className="nudge-arrow">›</span>
+          </div>
 
-            <View style={styles.section}>
-              <View style={styles.sectionHead}>
-                <Text style={styles.sectionTitle}>Upcoming tee times</Text>
-                <Text style={styles.sectionLink}>View all</Text>
-              </View>
-              {cards.map((card) => {
-                const isSelected = selectedCard === card.course;
+          <div style={{ height: '100px' }}></div>
+
+          <div className="track-actions">
+            <button className="track-btn prev" onClick={prevHole}>← PREV</button>
+            <button 
+              className={`track-btn next ${currentHole === 18 ? 'finish' : ''}`} 
+              id="trackNextBtn" 
+              onClick={nextHole}
+            >
+              {currentHole === 18 ? 'FINISH ROUND ✓' : 'NEXT HOLE →'}
+            </button>
+          </div>
+
+          {/* ===== END-OF-ROUND PROMPT OVERLAY ===== */}
+          <div className={`eor-overlay ${showEor ? 'show' : ''}`} id="eorOverlay">
+            <div className="eor-sheet">
+              <div className="eor-flag">▸ Round Complete</div>
+              <div className="eor-title">Nice round, <i>{profile?.username?.split(' ')[0] || 'Rico'}</i></div>
+              <div className="eor-summary" id="eorSummary">
+                {selectedCourse?.name || 'Shoal Creek'} · <b>{holeScores.reduce((acc, h) => acc + h.score, 0)}</b> · <b>{getDiffText(holeScores.reduce((acc, h) => acc + h.score, 0) - 71)}</b> · 18 holes logged
+              </div>
+
+              <div className="eor-options">
+                <button className="eor-option primary" onClick={eorChooseSnap}>
+                  <div className="eor-option-icon">📸</div>
+                  <div className="eor-option-body">
+                    <div className="eor-option-title">Snap the scorecard <span className="eor-pro-tag">PRO</span></div>
+                    <div className="eor-option-desc">Verify your scores from the card. Auto-checks math.</div>
+                  </div>
+                  <span className="eor-option-arrow">›</span>
+                </button>
+
+                <button className="eor-option" onClick={saveManualRound}>
+                  <div className="eor-option-icon">✓</div>
+                  <div className="eor-option-body">
+                    <div className="eor-option-title">Confirm manually</div>
+                    <div className="eor-option-desc">Trust what you logged. Save and head home.</div>
+                  </div>
+                  <span className="eor-option-arrow">›</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ============== PAYWALL SCREEN ============== */}
+        <div className={`screen ${screen === 'paywall' ? '' : 'hidden'}`} id="paywall-screen">
+          <div style={{ padding: '16px' }}>
+            <button className="back-btn" onClick={() => setScreen('log')}>← BACK</button>
+          </div>
+
+          <div className="paywall-hero">
+            <div className="paywall-badge">FORESOME PRO</div>
+            <div className="paywall-title">Elevate your game</div>
+            <div className="paywall-subtitle">Join the premier golf community and unlock advanced scanning & statistics.</div>
+          </div>
+
+          <div className="features-list">
+            <div className="feature-item">
+              <span className="feat-icon">📸</span>
+              <div className="feat-body">
+                <div className="feat-title">Snap Scorecard Scanner</div>
+                <div className="feat-desc">Instant score extraction from handwritten cards. Double checks match math.</div>
+              </div>
+            </div>
+            <div className="feature-item">
+              <span className="feat-icon">📊</span>
+              <div className="feat-body">
+                <div className="feat-title">Advanced Statistics</div>
+                <div className="feat-desc">Detailed analytics across KC metro courses. Track trends, FIR, GIR, & putting averages.</div>
+              </div>
+            </div>
+            <div className="feature-item">
+              <span className="feat-icon">⛳</span>
+              <div className="feat-body">
+                <div className="feat-title">Youth Camps Donation</div>
+                <div className="feat-desc">10% of subscription revenue ($7.90) goes directly to First Tee Kansas City.</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="price-selector">
+            <div className="price-card selected">
+              <div className="price-term">Annual Plan</div>
+              <div className="price-amt">$79<span className="price-sub">/yr</span></div>
+              <div className="price-desc">Best value · Donate $7.90 to First Tee</div>
+            </div>
+          </div>
+
+          <div style={{ padding: '0 24px', textAlign: 'center' }}>
+            <button className="cta-primary" onClick={() => { setIsPro(true); setScreen('stats'); }}>
+              START PRO · $79/YR
+            </button>
+            <button className="cta-secondary" onClick={() => setScreen('log')}>
+              Maybe later
+            </button>
+          </div>
+        </div>
+
+        {/* ============== BANTER CHAT SCREEN ============== */}
+        <div className={`screen ${screen === 'chat' ? '' : 'hidden'}`} id="chat-screen" style={{ display: 'flex', flexDirection: 'column', height: '100%', paddingBottom: 0 }}>
+          <div style={{ padding: '14px 16px 6px' }}>
+            <button className="back-btn" onClick={() => setScreen('home')}>← BACK</button>
+          </div>
+          <div className="chat-header">
+            <div className="chat-course">Shoal Creek · Saturday Foursome</div>
+            <div className="chat-meta">SAT MAY 23 · 7:42 AM · BLUE TEES</div>
+            <div className="chat-foursome">
+              <div className="player-dot filled">{profile?.initials || 'RQ'}</div>
+              <div className="player-dot filled">TJ</div>
+              <div className="player-dot filled">K</div>
+              <div className="player-dot empty">+</div>
+              <span className="roster-name">You · TJ · Keith · (1 open)</span>
+            </div>
+          </div>
+
+          <div className="chat-thread" id="chatThread" style={{ flex: 1, overflowY: 'auto', paddingBottom: '100px' }}>
+            <div className="chat-day">YESTERDAY · 6:24 PM</div>
+            {chatMessages.map((msg, index) => {
+              if (msg.system) {
                 return (
-                  <Pressable
-                    key={card.course}
-                    style={[styles.teeCard, isSelected && styles.teeCardActive]}
-                    onPress={() => setSelectedCard(card.course)}
-                  >
-                    <View style={styles.row}>
-                      <View>
-                        <Text style={styles.course}>{card.course}</Text>
-                        <Text style={styles.meta}>{card.meta}</Text>
-                      </View>
-                      <View style={styles.rightBlock}>
-                        <Text style={styles.time}>{card.time}</Text>
-                        <Text style={styles.date}>{card.date}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.footer}>
-                      <View style={styles.players}>
-                        {card.players.map((player, index) => (
-                          <View key={`${player}-${index}`} style={styles.playerDot}>
-                            <Text style={styles.playerDotText}>{player}</Text>
-                          </View>
-                        ))}
-                      </View>
-                      <Text style={styles.hcapBadge}>HCP {profile?.handicap !== undefined ? profile.handicap : '12'}</Text>
-                    </View>
-                  </Pressable>
+                  <div key={index}>
+                    {msg.time && <div className="chat-day">{msg.time}</div>}
+                    <div className="system-msg">{msg.text}</div>
+                  </div>
                 );
-              })}
-            </View>
-          </ScrollView>
-        )}
+              }
+              return (
+                <div key={index} className={`msg ${msg.isMe ? 'me' : 'them'}`}>
+                  <div className="msg-stack">
+                    <div className="sender">{msg.sender}</div>
+                    <div className="bubble">{msg.text}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
-        {screen !== 'scorecard' && (
-          <Pressable style={styles.fab} onPress={() => setScreen('scorecard')}>
-            <Text style={styles.fabText}>+</Text>
-          </Pressable>
-        )}
+          <div className="banter-input-area">
+            <div className="quick-reactions">
+              {['🍺 19th hole?', 'On my way', 'Running late', 'Send GPS 📍', '💸 Press the bet?'].map((reaction) => (
+                <div 
+                  key={reaction} 
+                  className="quick-chip" 
+                  onClick={() => sendQuickChat(reaction)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {reaction}
+                </div>
+              ))}
+            </div>
+            <div className="chat-compose">
+              <textarea
+                className="chat-textarea"
+                placeholder="Type a message…"
+                value={chatInputText}
+                onChange={(e) => setChatInputText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatText(); } }}
+                rows={1}
+              />
+              <button 
+                className="chat-send-btn"
+                onClick={sendChatText}
+                disabled={!chatInputText.trim()}
+              >
+                SEND
+              </button>
+            </div>
+          </div>
+        </div>
 
-        <View style={styles.bottomNav}>
-          {navItems.map((item) => {
-            const active = selectedNav === item.label;
-            return (
-              <Pressable key={item.label} style={styles.navBtn} onPress={() => setSelectedNav(item.label)}>
-                <Text style={[styles.navIcon, active && styles.navActiveText]}>{item.icon}</Text>
-                <Text style={[styles.navLabel, active && styles.navActiveText]}>{item.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-    </View>
+        {/* ============== STATS DASHBOARD ============== */}
+        <div className={`screen ${screen === 'stats' ? '' : 'hidden'}`} id="stats-screen">
+          <div style={{ padding: '16px 16px 0' }}>
+            <button className="back-btn" onClick={() => setScreen('home')}>← HOME</button>
+          </div>
+          <div className="screen-title">Your Intel</div>
+          <div className="screen-subtitle">LAST {totalRoundsCount || 12} ROUNDS · KC METRO</div>
+
+          <div className="stats-hero">
+            <div className="stats-grid-hero">
+              <div className="stat-big">
+                <div className="stat-num">{avgScore}<span className="trend">▼ 1.8</span></div>
+                <div className="stat-lbl">Scoring Avg</div>
+              </div>
+              <div className="stat-big">
+                <div className="stat-num">{profile?.handicap || '11.4'}<span className="trend">▼ 0.6</span></div>
+                <div className="stat-lbl">Handicap Idx</div>
+              </div>
+              <div className="stat-big">
+                <div className="stat-num">{avgFir}%<span className="trend">▲ 7%</span></div>
+                <div className="stat-lbl">FIR</div>
+              </div>
+              <div className="stat-big">
+                <div className="stat-num">{avgGir}%<span className="trend">▲ 4%</span></div>
+                <div className="stat-lbl">GIR</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="insight-card">
+            <div className="insight-eyebrow">▸ FORESOME INSIGHT</div>
+            <div className="insight-text">
+              You score <b>3.2 strokes better</b> when paired with players within 3 of your handicap.
+            </div>
+          </div>
+
+          <div style={{ padding: '0 16px' }}>
+            <div className="section-head" style={{ padding: '8px 4px' }}>
+              <span className="section-title">▸ Last Round · Hole by Hole</span>
+              <a className="section-link" href="#" onClick={(e) => e.preventDefault()}>ALL ROUNDS</a>
+            </div>
+          </div>
+
+          <div className="hole-grid-wrap">
+            <div className="hole-grid-head">
+              <div>
+                <div className="hole-grid-title">Shoal Creek · Blue</div>
+                <div className="hole-grid-meta">MAY 17 · 84 (+12) · TJ, K, E</div>
+              </div>
+              <div className="course-score">84</div>
+            </div>
+
+            <div className="hole-stat-toggle">
+              <button className={`hole-stat-btn ${holeStatView === 'score' ? 'active' : ''}`} onClick={() => setHoleStatView('score')}>SCORE</button>
+              <button className={`hole-stat-btn ${holeStatView === 'putts' ? 'active' : ''}`} onClick={() => setHoleStatView('putts')}>PUTTS</button>
+              <button className={`hole-stat-btn ${holeStatView === 'firgir' ? 'active' : ''}`} onClick={() => setHoleStatView('firgir')}>FIR/GIR</button>
+            </div>
+
+            {(() => {
+              const mockScores = [4, 5, 3, 5, 5, 4, 6, 4, 5, 4, 4, 6, 5, 5, 3, 6, 4, 6];
+              const mockPutts  = [2, 2, 1, 3, 2, 2, 2, 1, 2, 2, 1, 3, 2, 2, 1, 2, 2, 3];
+              const mockFir    = [1, 0, null, 1, 0, null, 1, 1, 0, 0, null, 1, 1, 0, null, 1, 0, 1]; // null = par 3 (no fairway)
+              const mockGir    = [1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1];
+
+              const cellContent = (holeIdx) => {
+                if (holeStatView === 'putts') return mockPutts[holeIdx];
+                if (holeStatView === 'firgir') {
+                  const fir = mockFir[holeIdx];
+                  const gir = mockGir[holeIdx];
+                  const firLabel = fir === null ? '—' : fir ? '✓' : '✗';
+                  const girLabel = gir ? '✓' : '✗';
+                  return (
+                    <span style={{ display: 'flex', flexDirection: 'column', gap: '1px', alignItems: 'center', fontSize: '9px' }}>
+                      <span style={{ color: fir === 1 ? 'var(--green)' : fir === 0 ? 'var(--red, #e74c3c)' : 'var(--text-dim)' }}>{firLabel}</span>
+                      <span style={{ color: gir ? 'var(--green)' : 'var(--red, #e74c3c)' }}>{girLabel}</span>
+                    </span>
+                  );
+                }
+                return mockScores[holeIdx];
+              };
+
+              const totalLabel = (arr, start, end) => arr.slice(start, end).reduce((a, b) => a + b, 0);
+
+              const totalsContent = (start, end) => {
+                if (holeStatView === 'putts') return totalLabel(mockPutts, start, end);
+                if (holeStatView === 'firgir') {
+                  const firHit = mockFir.slice(start, end).filter(v => v === 1).length;
+                  const girHit = mockGir.slice(start, end).filter(v => v === 1).length;
+                  return (
+                    <span style={{ display: 'flex', flexDirection: 'column', gap: '1px', alignItems: 'center', fontSize: '9px' }}>
+                      <span>{firHit}</span>
+                      <span>{girHit}</span>
+                    </span>
+                  );
+                }
+                return totalLabel(mockScores, start, end);
+              };
+
+              return (
+                <>
+                  {holeStatView === 'firgir' && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '4px 16px 0', gap: '12px' }}>
+                      <span style={{ fontSize: '9px', fontFamily: 'var(--mono)', color: 'var(--text-dim)', letterSpacing: '0.05em' }}>FIR ↑</span>
+                      <span style={{ fontSize: '9px', fontFamily: 'var(--mono)', color: 'var(--text-dim)', letterSpacing: '0.05em' }}>GIR ↓</span>
+                    </div>
+                  )}
+                  <div className="nine-label">FRONT 9</div>
+                  <div className="hole-grid">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((h) => (
+                      <div key={h} className="hole-col">
+                        <div className="grid-header">H{h}</div>
+                        <div className="grid-par">{SHOAL_CREEK_COURSE.pars[h - 1]}</div>
+                        <div className="grid-score">{cellContent(h - 1)}</div>
+                      </div>
+                    ))}
+                    <div className="hole-col total">
+                      <div className="grid-header">OUT</div>
+                      <div className="grid-par">37</div>
+                      <div className="grid-score">{totalsContent(0, 9)}</div>
+                    </div>
+                  </div>
+
+                  <div className="nine-label" style={{ marginTop: '14px' }}>BACK 9</div>
+                  <div className="hole-grid">
+                    {[10, 11, 12, 13, 14, 15, 16, 17, 18].map((h) => (
+                      <div key={h} className="hole-col">
+                        <div className="grid-header">H{h}</div>
+                        <div className="grid-par">{SHOAL_CREEK_COURSE.pars[h - 1]}</div>
+                        <div className="grid-score">{cellContent(h - 1)}</div>
+                      </div>
+                    ))}
+                    <div className="hole-col total">
+                      <div className="grid-header">IN</div>
+                      <div className="grid-par">34</div>
+                      <div className="grid-score">{totalsContent(9, 18)}</div>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+
+        {/* ============== SNAP INTRO SCREEN ============== */}
+        <div className={`screen ${screen === 'snap-intro' ? '' : 'hidden'}`} id="snap-intro-screen">
+          <div style={{ padding: '16px 16px 0' }}>
+            <button className="back-btn" onClick={() => setScreen('home')}>← BACK</button>
+          </div>
+
+          <div className="snap-intro-hero">
+            <div className="snap-intro-badge">PRO FEATURE</div>
+            <div className="snap-intro-icon">📸</div>
+            <div className="snap-intro-title">Snap your <i>scorecard</i></div>
+            <div className="snap-intro-sub">
+              Best used at the end of your round — capture all 18 holes and we'll verify your scores automatically.
+            </div>
+          </div>
+
+          <div className="snap-intro-content">
+            <div className="snap-intro-step">
+              <div className="snap-intro-step-num">1</div>
+              <div className="snap-intro-step-body">
+                <div className="snap-intro-step-title">Finish your round</div>
+                <div className="snap-intro-step-desc">Log holes manually as you play, then snap the card when you're done.</div>
+              </div>
+            </div>
+
+            <div className="snap-intro-step">
+              <div className="snap-intro-step-num">2</div>
+              <div className="snap-intro-step-body">
+                <div className="snap-intro-step-title">Capture the card</div>
+                <div className="snap-intro-step-desc">Lay it flat under good light. Make sure all 18 holes and the totals row are in frame.</div>
+              </div>
+            </div>
+
+            <div className="snap-intro-step">
+              <div className="snap-intro-step-num">3</div>
+              <div className="snap-intro-step-body">
+                <div className="snap-intro-step-title">Review &amp; confirm</div>
+                <div className="snap-intro-step-desc">We extract scores, flag anything we're unsure about, and check the math. You confirm and the round saves.</div>
+              </div>
+            </div>
+          </div>
+
+          {isPro ? (
+            <div className="snap-intro-cta" id="snapIntroCtaPro">
+              <button className="snap-intro-primary" onClick={() => setScreen('camera')}>📸 OPEN CAMERA</button>
+              <button className="snap-intro-secondary" onClick={() => alert('Photo library upload mock — in production triggers system file selector.')}>UPLOAD FROM LIBRARY</button>
+              <div className="snap-intro-tip">
+                <b>Tip:</b> Most accurate at end-of-round when all scores are filled in. Mid-round captures may miss holes.
+              </div>
+            </div>
+          ) : (
+            <div className="snap-intro-locked" id="snapIntroCtaLocked">
+              <div className="snap-intro-locked-icon">🔒</div>
+              <div className="snap-intro-locked-title">Snap Card is a Pro feature</div>
+              <div className="snap-intro-locked-text">
+                Skip the manual entry. Snap your card after the round and we'll verify all 18 scores in seconds.
+              </div>
+              <button className="snap-intro-locked-btn" onClick={() => setScreen('paywall')}>UNLOCK PRO</button>
+            </div>
+          )}
+        </div>
+
+        {/* ============== CAMERA SCREEN ============== */}
+        <div className={`screen ${screen === 'camera' ? '' : 'hidden'}`} id="camera-screen">
+          <div className="cam-topbar">
+            <button className="cam-cancel" onClick={() => setScreen('snap-intro')}>✕ CANCEL</button>
+            <div className="cam-title">Snap Card</div>
+            <div className="cam-pro-badge">PRO</div>
+          </div>
+
+          <div className="cam-viewport">
+            <div className="cam-frame">
+              <span className="corner-bl"></span>
+              <span className="corner-br"></span>
+              <div className="cam-frame-hint">ALIGN SCORECARD INSIDE FRAME</div>
+            </div>
+
+            {isScanning && (
+              <div className="cam-processing-overlay" id="camProcessing" style={{ display: 'flex' }}>
+                <div className="cam-spinner"></div>
+                <div className="cam-processing-text">Reading your card...</div>
+                <div className="cam-processing-sub" id="camProcessingStep">{processingStep}</div>
+              </div>
+            )}
+          </div>
+
+          <div className="cam-tips">
+            <div className="cam-tips-label">▸ For best results</div>
+            <ul>
+              <li>Lay card flat — fold creases trip up the scanner</li>
+              <li>Soft light, no glare — pro shop counter is usually perfect</li>
+              <li>Capture all 18 holes + totals row in frame</li>
+            </ul>
+          </div>
+
+          <div className="cam-actionbar">
+            <button className="cam-side-btn" onClick={() => alert('Photo library upload mock')} title="From library">🖼</button>
+            <div style={{ position: 'relative' }}>
+              <button className="cam-shutter" id="camShutter" onClick={startCameraScan} title="Capture"></button>
+              <div className="cam-shutter-label">TAP TO SCAN</div>
+            </div>
+            <button className="cam-side-btn" onClick={() => alert('Flash toggle mock')} title="Flash">⚡</button>
+          </div>
+        </div>
+
+        {/* ============== REVIEW SCAN SCREEN ============== */}
+        <div className={`screen ${screen === 'review' ? '' : 'hidden'}`} id="review-screen">
+          <div className="review-header">
+            <button className="review-back" onClick={() => setScreen('camera')}>← RETAKE</button>
+            <div className="review-h-title">Review Scan</div>
+            <div className="review-confidence-pill mid" id="reviewConfPill">87% CONF</div>
+          </div>
+
+          <div className="review-content">
+            <div className="review-thumb-row">
+              <div className="review-thumb">📇</div>
+              <div className="review-thumb-meta">
+                <div className="review-course-name" id="reviewCourseName">{reviewCourse}</div>
+                <div className="review-course-sub">{reviewTee} tees · {new Date(reviewDate).toLocaleDateString()} · KC, MO</div>
+              </div>
+            </div>
+
+            <div className="review-warning" id="reviewWarning">
+              <div className="review-warning-icon">⚠</div>
+              <div className="review-warning-text">
+                <b>Two scores flagged for review.</b> Hole 7 and hole 14 had ambiguous handwriting — tap to confirm or correct.
+              </div>
+            </div>
+
+            <div className="review-section-head">
+              <span className="review-section-title">▸ Round Details</span>
+            </div>
+            <div className="review-field-row">
+              <div className="review-field">
+                <div className="review-field-label">
+                  <span>Course</span>
+                  <span className="review-field-conf">99%</span>
+                </div>
+                <input type="text" value={reviewCourse} onChange={(e) => setReviewCourse(e.target.value)} />
+              </div>
+              <div className="review-field">
+                <div className="review-field-label">
+                  <span>Tees</span>
+                  <span className="review-field-conf">94%</span>
+                </div>
+                <select value={reviewTee} onChange={(e) => setReviewTee(e.target.value)}>
+                  <option>Blue</option><option>White</option><option>Black</option><option>Red</option>
+                </select>
+              </div>
+            </div>
+            <div className="review-field-row">
+              <div className="review-field">
+                <div className="review-field-label">
+                  <span>Date</span>
+                  <span className="review-field-conf">98%</span>
+                </div>
+                <input type="date" value={reviewDate} onChange={(e) => setReviewDate(e.target.value)} />
+              </div>
+              <div className="review-field warn">
+                <div className="review-field-label">
+                  <span>Total Par</span>
+                  <span className="review-field-conf low">62%</span>
+                </div>
+                <input type="number" value={reviewTotalPar} onChange={(e) => setReviewTotalPar(Number(e.target.value))} />
+              </div>
+            </div>
+
+            <div className="math-banner" id="mathBanner">
+              <span className="mc-icon">✓</span>
+              <div>Math checks out. Hole scores sum to recorded totals for all 4 players.</div>
+            </div>
+
+            <div className="review-section-head">
+              <span className="review-section-title">▸ Scores · Tap to edit</span>
+            </div>
+
+            {/* Rico score block */}
+            <div className="review-player-block">
+              <div className="review-player-head">
+                <div className="review-player-name">{profile?.username || 'Rico'}</div>
+                <div className="review-player-total">
+                  {reviewScores.reduce((a, b) => a + b, 0)} <span className="vs">+{reviewScores.reduce((a, b) => a + b, 0) - 71}</span>
+                </div>
+              </div>
+
+              {/* Front 9 */}
+              <div className="review-hole-grid">
+                <div className="gh row-label">HOLE</div>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => <div key={n} className="gh">{n}</div>)}
+                <div className="gh row-label">PAR</div>
+                {[4, 5, 3, 4, 4, 3, 5, 4, 4].map((p, i) => <div key={i} className="par-cell">{p}</div>)}
+                <div className="gh row-label">SCORE</div>
+                {reviewScores.slice(0, 9).map((s, idx) => (
+                  <input 
+                    key={idx} 
+                    className={`score-cell ${idx === 6 ? 'flagged' : ''}`} 
+                    type="number" 
+                    value={s} 
+                    onChange={(e) => updateReviewScore(idx, e.target.value)}
+                  />
+                ))}
+              </div>
+              <div className="review-out-in">
+                <span>OUT <b>{reviewScores.slice(0, 9).reduce((a, b) => a + b, 0)}</b></span>
+              </div>
+
+              {/* Back 9 */}
+              <div className="review-hole-grid" style={{ marginTop: '10px' }}>
+                <div className="gh row-label">HOLE</div>
+                {[10, 11, 12, 13, 14, 15, 16, 17, 18].map(n => <div key={n} className="gh">{n}</div>)}
+                <div className="gh row-label">PAR</div>
+                {[4, 3, 5, 4, 4, 3, 5, 4, 4].map((p, i) => <div key={i} className="par-cell">{p}</div>)}
+                <div className="gh row-label">SCORE</div>
+                {reviewScores.slice(9, 18).map((s, idx) => (
+                  <input 
+                    key={idx} 
+                    className={`score-cell ${idx === 4 ? 'flagged' : ''}`} 
+                    type="number" 
+                    value={s} 
+                    onChange={(e) => updateReviewScore(idx + 9, e.target.value)}
+                  />
+                ))}
+              </div>
+              <div className="review-out-in">
+                <span>IN <b>{reviewScores.slice(9, 18).reduce((a, b) => a + b, 0)}</b></span>
+              </div>
+            </div>
+
+            {/* TJ score block */}
+            <div className="review-player-block">
+              <div className="review-player-head">
+                <div className="review-player-name">TJ</div>
+                <div className="review-player-total">
+                  {reviewScoresTj.reduce((a, b) => a + b, 0)} <span className="vs">+{reviewScoresTj.reduce((a, b) => a + b, 0) - 71}</span>
+                </div>
+              </div>
+              <div className="review-hole-grid">
+                <div className="gh row-label">HOLE</div>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => <div key={n} className="gh">{n}</div>)}
+                <div className="gh row-label">PAR</div>
+                {[4, 5, 3, 4, 4, 3, 5, 4, 4].map((p, i) => <div key={i} className="par-cell">{p}</div>)}
+                <div className="gh row-label">SCORE</div>
+                {reviewScoresTj.slice(0, 9).map((s, idx) => (
+                  <input 
+                    key={idx} 
+                    className="score-cell" 
+                    type="number" 
+                    value={s} 
+                    onChange={(e) => setReviewScoresTj(prev => prev.map((sc, i) => i === idx ? Number(e.target.value) : sc))}
+                  />
+                ))}
+              </div>
+              <div className="review-out-in">
+                <span>OUT <b>{reviewScoresTj.slice(0, 9).reduce((a, b) => a + b, 0)}</b></span>
+              </div>
+            </div>
+          </div>
+
+          <div className="review-actionbar">
+            <button className="review-retake-btn" onClick={() => setScreen('camera')}>↺ RETAKE</button>
+            <button className="review-save-btn" onClick={saveReviewRound}>CONFIRM &amp; SAVE ROUND →</button>
+          </div>
+        </div>
+
+        {/* ============== PERSISTENT BOTTOM NAVIGATION BAR ============== */}
+        {!['chat', 'paywall', 'tracker', 'camera', 'review'].includes(screen) && (
+          <div className="bottom-nav">
+            <button className={`nav-btn ${screen === 'home' ? 'active' : ''}`} onClick={() => setScreen('home')}>
+              <span className="icon">⛳</span>
+              <span>TEES</span>
+            </button>
+            <button className={`nav-btn ${screen === 'chat' ? 'active' : ''}`} onClick={() => setScreen('chat')}>
+              <span className="icon">💬</span>
+              <span>BANTER</span>
+            </button>
+            <button className={`nav-btn snap ${screen === 'snap-intro' || screen === 'camera' || screen === 'review' ? 'active' : ''}`} onClick={() => setScreen('snap-intro')}>
+              <span className="icon">📸</span>
+              <span>SNAP</span>
+            </button>
+            <button className={`nav-btn ${screen === 'log' ? 'active' : ''}`} onClick={() => setScreen('log')}>
+              <span className="icon">📝</span>
+              <span>LOG</span>
+            </button>
+            <button className={`nav-btn ${screen === 'stats' ? 'active' : ''}`} onClick={() => setScreen('stats')}>
+              <span className="icon">📊</span>
+              <span>INTEL</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="header-bar" style={{ marginTop: '20px', opacity: 0.6 }}>
+        <span style={{ fontSize: '9px' }}>PROTOTYPE · TAP THROUGH THE FLOW</span>
+        <span style={{ fontSize: '9px' }}>v0.1 · KC METRO</span>
+      </div>
+    </div>
   );
 }
-
-const styles = StyleSheet.create({
-  stage: {
-    minHeight: '100vh',
-    width: '100%',
-    alignItems: 'center',
-    padding: 24,
-    backgroundColor: '#1a2c20'
-  },
-  headerBar: {
-    width: '100%',
-    maxWidth: 420,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#b89a5c',
-    marginRight: 6,
-    shadowColor: '#b89a5c',
-    shadowOpacity: 0.7,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 0 }
-  },
-  headerText: {
-    fontSize: 11,
-    color: '#c9bf9f',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase'
-  },
-  togglePro: {
-    backgroundColor: '#243d2c',
-    borderWidth: 1,
-    borderColor: '#335041',
-    borderRadius: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 10
-  },
-  toggleProText: {
-    fontSize: 10,
-    color: '#c9bf9f',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase'
-  },
-  phone: {
-    width: '100%',
-    maxWidth: 390,
-    height: 812,
-    backgroundColor: '#1a2c20',
-    borderRadius: 36,
-    borderWidth: 1,
-    borderColor: '#335041',
-    overflow: 'hidden',
-    position: 'relative'
-  },
-  notch: {
-    position: 'absolute',
-    top: 8,
-    left: '50%',
-    transform: [{ translateX: -55 }],
-    width: 110,
-    height: 26,
-    backgroundColor: '#0d1812',
-    borderRadius: 18,
-    zIndex: 100
-  },
-  statusBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 14,
-    paddingBottom: 6,
-    paddingHorizontal: 28
-  },
-  statusText: {
-    fontSize: 13,
-    color: '#f1ead9',
-    fontWeight: '700'
-  },
-  statusIcons: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  iconText: {
-    marginLeft: 8,
-    fontSize: 12,
-    color: '#f1ead9'
-  },
-  screen: {
-    flex: 1,
-    paddingBottom: 100
-  },
-  screenContent: {
-    paddingBottom: 20
-  },
-  hero: {
-    marginTop: 20,
-    marginHorizontal: 16,
-    marginBottom: 20,
-    padding: 20,
-    backgroundColor: '#243d2c',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#335041'
-  },
-  heroLabel: {
-    fontSize: 10,
-    color: '#b89a5c',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    marginBottom: 6
-  },
-  heroTitle: {
-    fontSize: 22,
-    color: '#f1ead9',
-    fontWeight: '600',
-    marginBottom: 14
-  },
-  heroStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-between'
-  },
-  heroStatText: {
-    fontSize: 11,
-    color: '#c9bf9f',
-    flex: 1
-  },
-  heroStatValue: {
-    color: '#f1ead9',
-    fontWeight: '700'
-  },
-  heroSubtitle: {
-    fontSize: 12,
-    color: '#c9bf9f',
-    marginTop: 4,
-    marginBottom: 12
-  },
-  courseCard: {
-    marginHorizontal: 16,
-    marginBottom: 10,
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: '#1e3527',
-    borderWidth: 1,
-    borderColor: '#335041'
-  },
-  teeOptionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginVertical: 14,
-    marginHorizontal: 16
-  },
-  teeOption: {
-    flex: 1,
-    marginHorizontal: 4,
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#335041',
-    backgroundColor: '#243d2c',
-    alignItems: 'center'
-  },
-  teeOptionActive: {
-    backgroundColor: '#2a4632',
-    borderColor: '#b89a5c'
-  },
-  teeOptionText: {
-    fontSize: 11,
-    color: '#c9bf9f',
-    fontWeight: '600'
-  },
-  teeOptionTextActive: {
-    color: '#f1ead9'
-  },
-  sectionSubtitle: {
-    marginHorizontal: 16,
-    fontSize: 11,
-    color: '#c9bf9f',
-    marginBottom: 12
-  },
-  emptyText: {
-    marginHorizontal: 16,
-    fontSize: 11,
-    color: '#c9bf9f',
-    marginBottom: 12
-  },
-  roundSummaryCard: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    padding: 16,
-    borderRadius: 18,
-    backgroundColor: '#243d2c',
-    borderWidth: 1,
-    borderColor: '#335041'
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: '#f1ead9',
-    fontWeight: '700',
-    marginBottom: 6
-  },
-  summaryMeta: {
-    fontSize: 10,
-    color: '#c9bf9f',
-    marginBottom: 14
-  },
-  summaryStatsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between'
-  },
-  summaryStatBlock: {
-    flex: 1,
-    alignItems: 'center'
-  },
-  summaryStatValue: {
-    fontSize: 15,
-    color: '#f1ead9',
-    fontWeight: '700'
-  },
-  summaryStatLabel: {
-    fontSize: 9,
-    color: '#c9bf9f',
-    marginTop: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.08
-  },
-  scorecardHeader: {
-    marginTop: 20,
-    marginHorizontal: 16,
-    marginBottom: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12
-  },
-  backBtn: {
-    borderWidth: 1,
-    borderColor: '#335041',
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginRight: 8
-  },
-  backBtnText: {
-    color: '#b89a5c',
-    fontSize: 11,
-    fontWeight: '700'
-  },
-  screenTitle: {
-    fontSize: 18,
-    color: '#f1ead9',
-    fontWeight: '700'
-  },
-  screenSubtitle: {
-    fontSize: 11,
-    color: '#c9bf9f',
-    marginTop: 2
-  },
-  holeRow: {
-    marginHorizontal: 16,
-    marginBottom: 14,
-    padding: 16,
-    borderRadius: 18,
-    backgroundColor: '#243d2c',
-    borderWidth: 1,
-    borderColor: '#335041'
-  },
-  holeMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12
-  },
-  holeLabel: {
-    color: '#f1ead9',
-    fontSize: 13,
-    fontWeight: '700'
-  },
-  holePar: {
-    color: '#c9bf9f',
-    fontSize: 11
-  },
-  scoreInputsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10
-  },
-  inputGroup: {
-    flex: 1
-  },
-  inputLabel: {
-    color: '#c9bf9f',
-    fontSize: 9,
-    marginBottom: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 0.1
-  },
-  input: {
-    height: 42,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#335041',
-    paddingHorizontal: 12,
-    color: '#f1ead9',
-    backgroundColor: '#1a2c20'
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 12,
-    gap: 10
-  },
-  toggleChip: {
-    flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#335041',
-    paddingVertical: 10,
-    alignItems: 'center',
-    backgroundColor: '#1e3527'
-  },
-  toggleChipActive: {
-    backgroundColor: '#2a4632',
-    borderColor: '#b89a5c'
-  },
-  toggleText: {
-    color: '#c9bf9f',
-    fontSize: 11,
-    fontWeight: '700'
-  },
-  toggleTextActive: {
-    color: '#f1ead9'
-  },
-  saveRoundBtn: {
-    marginHorizontal: 16,
-    marginBottom: 28,
-    borderRadius: 14,
-    backgroundColor: '#b89a5c',
-    paddingVertical: 14,
-    alignItems: 'center'
-  },
-  saveRoundText: {
-    color: '#1a2c20',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.15,
-    textTransform: 'uppercase'
-  },
-  startRoundBtn: {
-    marginHorizontal: 16,
-    borderRadius: 14,
-    backgroundColor: '#b89a5c',
-    paddingVertical: 14,
-    alignItems: 'center'
-  },
-  startRoundText: {
-    color: '#1a2c20',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.15,
-    textTransform: 'uppercase'
-  },
-  courseCardActive: {
-    backgroundColor: '#2a4632',
-    borderColor: '#b89a5c'
-  },
-  courseCardRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-  courseInfo: {
-    flex: 1,
-    paddingRight: 10
-  },
-  courseCardTitle: {
-    fontSize: 14,
-    color: '#f1ead9',
-    fontWeight: '700',
-    marginBottom: 4
-  },
-  courseCardMeta: {
-    fontSize: 10,
-    color: '#c9bf9f'
-  },
-  courseDistance: {
-    fontSize: 13,
-    color: '#b89a5c',
-    fontWeight: '700'
-  },
-  section: {
-    marginBottom: 20
-  },
-  sectionHead: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 10,
-    paddingHorizontal: 4
-  },
-  sectionTitle: {
-    fontSize: 10,
-    color: '#c9bf9f',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase'
-  },
-  sectionLink: {
-    fontSize: 10,
-    color: '#b89a5c',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase'
-  },
-  refreshButton: {
-    paddingVertical: 4,
-    paddingHorizontal: 8
-  },
-  teeCard: {
-    marginHorizontal: 16,
-    marginBottom: 10,
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: '#243d2c',
-    borderWidth: 1,
-    borderColor: '#335041'
-  },
-  teeCardActive: {
-    backgroundColor: '#2a4632',
-    borderColor: '#b89a5c'
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start'
-  },
-  course: {
-    fontSize: 17,
-    color: '#f1ead9',
-    marginBottom: 4
-  },
-  meta: {
-    fontSize: 10,
-    color: '#c9bf9f',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase'
-  },
-  rightBlock: {
-    alignItems: 'flex-end'
-  },
-  time: {
-    fontSize: 13,
-    color: '#b89a5c',
-    fontWeight: '700'
-  },
-  date: {
-    fontSize: 10,
-    color: '#8c8467',
-    marginTop: 2
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#426452'
-  },
-  players: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  playerDot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#243d2c',
-    borderWidth: 1.5,
-    borderColor: '#426452',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: -8
-  },
-  playerDotText: {
-    fontSize: 9,
-    color: '#c9bf9f',
-    fontWeight: '700'
-  },
-  hcapBadge: {
-    fontSize: 10,
-    color: '#c9bf9f',
-    backgroundColor: '#243d2c',
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#335041'
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 90,
-    right: 16,
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: '#b89a5c',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#b89a5c',
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 8 },
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)'
-  },
-  fabText: {
-    color: '#1a2c20',
-    fontSize: 26,
-    fontWeight: '700'
-  },
-  bottomNav: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(10,14,12,0.92)',
-    borderTopWidth: 1,
-    borderTopColor: '#335041',
-    paddingVertical: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center'
-  },
-  navBtn: {
-    alignItems: 'center'
-  },
-  navIcon: {
-    fontSize: 18,
-    color: '#c9bf9f'
-  },
-  navLabel: {
-    fontSize: 9,
-    color: '#c9bf9f',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase'
-  },
-  navActiveText: {
-    color: '#b89a5c'
-  },
-  statsHeader: {
-    marginTop: 20,
-    marginHorizontal: 16,
-    marginBottom: 16
-  },
-  statsTitle: {
-    fontSize: 18,
-    color: '#f1ead9',
-    fontWeight: '700'
-  },
-  statsSubtitle: {
-    fontSize: 11,
-    color: '#c9bf9f',
-    marginTop: 4
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: 12,
-    marginBottom: 20
-  },
-  statCard: {
-    width: '45%',
-    aspectRatio: 1.2,
-    margin: '2.5%',
-    backgroundColor: '#243d2c',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#335041',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 10
-  },
-  statValue: {
-    fontSize: 26,
-    color: '#b89a5c',
-    fontWeight: '700',
-    marginBottom: 4
-  },
-  statLabel: {
-    fontSize: 9,
-    color: '#c9bf9f',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8
-  },
-  historyCard: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    padding: 14,
-    backgroundColor: '#243d2c',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#335041'
-  },
-  historyRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8
-  },
-  historyCourse: {
-    fontSize: 13,
-    color: '#f1ead9',
-    fontWeight: '700',
-    marginBottom: 2
-  },
-  historyMeta: {
-    fontSize: 9,
-    color: '#c9bf9f'
-  },
-  historyScoreContainer: {
-    alignItems: 'center',
-    backgroundColor: '#1a2c20',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#335041'
-  },
-  historyScoreValue: {
-    fontSize: 14,
-    color: '#b89a5c',
-    fontWeight: '700'
-  },
-  historyScoreLabel: {
-    fontSize: 7,
-    color: '#c9bf9f',
-    textTransform: 'uppercase'
-  },
-  historyStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: '#335041',
-    paddingTop: 8,
-    marginTop: 4
-  },
-  historyStatBlock: {
-    flex: 1,
-    alignItems: 'center'
-  },
-  historyStatVal: {
-    fontSize: 12,
-    color: '#f1ead9',
-    fontWeight: '700'
-  },
-  historyStatLbl: {
-    fontSize: 8,
-    color: '#c9bf9f',
-    textTransform: 'uppercase'
-  },
-  snapPostBtn: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    backgroundColor: '#243d2c',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#335041',
-    paddingVertical: 12,
-    alignItems: 'center'
-  },
-  snapPostBtnText: {
-    color: '#b89a5c',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase'
-  },
-  snapCard: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    padding: 16,
-    backgroundColor: '#243d2c',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#335041'
-  },
-  snapHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8
-  },
-  snapAuthor: {
-    fontSize: 13,
-    color: '#f1ead9',
-    fontWeight: '700'
-  },
-  snapTime: {
-    fontSize: 9,
-    color: '#c9bf9f'
-  },
-  snapText: {
-    fontSize: 12,
-    color: '#c9bf9f',
-    lineHeight: 16,
-    marginBottom: 10
-  },
-  snapImage: {
-    height: 120,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden'
-  },
-  snapImageText: {
-    fontSize: 11,
-    color: '#f1ead9',
-    fontWeight: '600'
-  },
-  alertCard: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    padding: 14,
-    backgroundColor: '#243d2c',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#335041'
-  },
-  alertHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6
-  },
-  alertTitle: {
-    fontSize: 12,
-    color: '#b89a5c',
-    fontWeight: '700'
-  },
-  alertTime: {
-    fontSize: 8,
-    color: '#c9bf9f'
-  },
-  alertBody: {
-    fontSize: 11,
-    color: '#f1ead9',
-    lineHeight: 15
-  },
-  alertActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 10
-  },
-  alertButtonAccept: {
-    flex: 1,
-    backgroundColor: '#b89a5c',
-    borderRadius: 8,
-    paddingVertical: 8,
-    alignItems: 'center'
-  },
-  alertButtonDecline: {
-    flex: 1,
-    backgroundColor: '#1a2c20',
-    borderWidth: 1,
-    borderColor: '#335041',
-    borderRadius: 8,
-    paddingVertical: 8,
-    alignItems: 'center'
-  },
-  alertButtonTextAccept: {
-    fontSize: 10,
-    color: '#1a2c20',
-    fontWeight: '700'
-  },
-  alertButtonTextDecline: {
-    fontSize: 10,
-    color: '#f1ead9',
-    fontWeight: '700'
-  }
-});
-
