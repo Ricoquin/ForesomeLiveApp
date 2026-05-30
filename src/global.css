@@ -94,6 +94,9 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
+.header-bar img {
+  mix-blend-mode: screen;
+}
 
 .header-bar .dot {
   width: 6px;
@@ -3588,8 +3591,27 @@ body {
 
 /* ---- App Header Logo ---- */
 .app-header-logo {
-  width: 44px;
+  width: 40px;
   height: auto;
   flex-shrink: 0;
   filter: drop-shadow(0 1px 3px rgba(0,0,0,0.2));
+  mix-blend-mode: screen;
+}
+
+/* ---- App Header Title/Subtitle ---- */
+.app-title {
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--cream);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.app-subtitle {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-top: 2px;
 }
