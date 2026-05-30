@@ -546,29 +546,26 @@ export default function App() {
         </div>
         <div className="phone">
           
-          <div className="screen" style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', overflowY: 'auto' }}>
-            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-              <h1 style={{ fontFamily: 'var(--display)', fontSize: '32px', fontWeight: '900', color: 'var(--text)', marginTop: '24px' }}>
-                Welcome to <span style={{ color: 'var(--gold)', fontStyle: 'italic' }}>ForeSome</span>
-              </h1>
-              <p style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--text-dim)', marginTop: '6px' }}>
-                THE SOCIAL GOLF APP
-              </p>
+          <div className="screen auth-screen">
+            {/* Logo + Branding */}
+            <div className="auth-brand">
+              <img src={foresomeLogo} alt="ForeSome" className="auth-logo" />
+              <div className="auth-tagline">Find Your Foursome</div>
+              <div className="auth-sub">Track · Compete · Connect</div>
             </div>
 
-            <div style={{ display: 'flex', background: 'var(--bg-elevated)', borderRadius: '12px', padding: '4px', marginBottom: '20px' }}>
+            {/* Tab Switcher */}
+            <div className="auth-tabs">
               <button 
                 type="button"
-                className="nav-btn"
-                style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: authMode === 'login' ? 'var(--bg-card)' : 'transparent', color: authMode === 'login' ? 'var(--text)' : 'var(--text-dim)', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}
+                className={`auth-tab ${authMode === 'login' ? 'active' : ''}`}
                 onClick={() => { setAuthMode('login'); setAuthError(''); }}
               >
                 Log In
               </button>
               <button 
                 type="button"
-                className="nav-btn"
-                style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: authMode === 'signup' ? 'var(--bg-card)' : 'transparent', color: authMode === 'signup' ? 'var(--text)' : 'var(--text-dim)', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}
+                className={`auth-tab ${authMode === 'signup' ? 'active' : ''}`}
                 onClick={() => { setAuthMode('signup'); setAuthError(''); }}
               >
                 Sign Up
@@ -576,68 +573,67 @@ export default function App() {
             </div>
 
             {authError && (
-              <div style={{ background: 'rgba(232, 138, 138, 0.12)', border: '1px solid var(--danger)', borderRadius: '10px', padding: '12px', marginBottom: '18px', color: 'var(--danger)', fontSize: '12px', fontFamily: 'var(--body)' }}>
-                {authError}
-              </div>
+              <div className="auth-error">{authError}</div>
             )}
 
-            <div className="scorecard-form" style={{ padding: 0, border: 'none', background: 'transparent' }}>
-              <div className="form-field" style={{ marginBottom: '14px' }}>
+            {/* Form */}
+            <div className="auth-form">
+              <div className="auth-field">
                 <label>Email Address</label>
                 <input 
                   type="email" 
                   placeholder="you@example.com" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  style={{ width: '100%', height: '42px', borderRadius: '12px', border: '1px solid var(--border)', padding: '0 12px', background: 'var(--bg)', color: 'var(--text)', outline: 'none' }}
                 />
               </div>
 
-              <div className="form-field" style={{ marginBottom: '14px' }}>
+              <div className="auth-field">
                 <label>Password</label>
                 <input 
                   type="password" 
                   placeholder="••••••••" 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  style={{ width: '100%', height: '42px', borderRadius: '12px', border: '1px solid var(--border)', padding: '0 12px', background: 'var(--bg)', color: 'var(--text)', outline: 'none' }}
                 />
               </div>
 
               {authMode === 'signup' && (
                 <>
-                  <div className="form-field" style={{ marginBottom: '14px' }}>
-                    <label>Username / Name</label>
+                  <div className="auth-field">
+                    <label>Your Name</label>
                     <input 
                       type="text" 
                       placeholder="Keith M." 
                       value={usernameInput}
                       onChange={(e) => setUsernameInput(e.target.value)}
-                      style={{ width: '100%', height: '42px', borderRadius: '12px', border: '1px solid var(--border)', padding: '0 12px', background: 'var(--bg)', color: 'var(--text)', outline: 'none' }}
                     />
                   </div>
 
-                  <div className="form-field" style={{ marginBottom: '14px' }}>
+                  <div className="auth-field">
                     <label>Golf Handicap (HCP)</label>
                     <input 
                       type="number" 
                       placeholder="12" 
                       value={handicapInput}
                       onChange={(e) => setHandicapInput(e.target.value)}
-                      style={{ width: '100%', height: '42px', borderRadius: '12px', border: '1px solid var(--border)', padding: '0 12px', background: 'var(--bg)', color: 'var(--text)', outline: 'none' }}
                     />
                   </div>
                 </>
               )}
 
               <button 
-                className="save-btn" 
+                className="auth-submit" 
                 onClick={handleAuth} 
                 disabled={authLoading}
-                style={{ width: '100%', marginTop: '10px' }}
               >
-                {authLoading ? 'Connecting...' : authMode === 'login' ? 'ACCESS ACCOUNT' : 'REGISTER NOW'}
+                {authLoading ? 'Connecting...' : authMode === 'login' ? '⛳ ACCESS ACCOUNT' : '🏌️ REGISTER NOW'}
               </button>
+            </div>
+
+            {/* Footer */}
+            <div className="auth-footer">
+              KC METRO · FOR ALL GOLFERS · V0.1
             </div>
           </div>
         </div>
