@@ -327,12 +327,78 @@ body {
   margin-bottom: 20px;
 }
 
+/* ---- Hero Card (Next Up CTA) ---- */
+.hero-card {
+  margin: 4px 16px 16px;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-card-2) 100%);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  text-align: center;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.hero-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+}
+.hero-card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -30%;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, var(--green-glow) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: var(--green);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.hero-card .hero-title {
+  font-family: var(--display);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--cream);
+  margin-bottom: 14px;
+}
+.hero-meta {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+  position: relative;
+  z-index: 1;
+}
+.hero-time {
+  color: var(--text);
+  font-weight: 600;
+}
+.hero-players {
+  color: var(--text-dim);
+}
+.hero-hcap {
+  color: var(--text-dim);
+}
+
 .section-head {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   margin-bottom: 10px;
-  padding: 0 16px;
+  padding: 8px 16px;
+  text-align: center;
 }
 
 .section-title {
