@@ -94,9 +94,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
-.header-bar img {
-  mix-blend-mode: screen;
-}
+
 
 .header-bar .dot {
   width: 6px;
@@ -3607,7 +3605,6 @@ body {
   height: auto;
   flex-shrink: 0;
   filter: drop-shadow(0 1px 3px rgba(0,0,0,0.2));
-  mix-blend-mode: screen;
 }
 
 /* ---- App Header Title/Subtitle ---- */
