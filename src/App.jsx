@@ -545,15 +545,6 @@ export default function App() {
           </button>
         </div>
         <div className="phone">
-          <div className="notch"></div>
-          <div className="status-bar">
-            <span>8:42</span>
-            <div className="status-icons">
-              <span>●●●●●</span>
-              <span>5G</span>
-              <span>🔋</span>
-            </div>
-          </div>
           
           <div className="screen" style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', overflowY: 'auto' }}>
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
@@ -668,46 +659,23 @@ export default function App() {
         </button>
       </div>
 
-      <div className="toggle-hint" id="toggleHint">↑ TAP TO TOGGLE FREE / PRO</div>
-
       <div className="phone">
-        <div className="notch"></div>
-
-        <div className="status-bar">
-          <span id="statusTime">12:16</span>
-          <div className="status-icons">
-            <span>●●●●●</span>
-            <span>5G</span>
-            <span>🔋</span>
-          </div>
-        </div>
 
         {/* ============== TEES SCREEN (HOME) ============== */}
         <div className={`screen ${screen === 'home' ? '' : 'hidden'}`} id="home-screen">
           <div className="app-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div className="app-header-left">
               <img src={foresomeLogo} alt="ForeSome" className="app-header-logo" />
               <div>
                 <div className="app-title">ForeSome</div>
                 <div className="app-subtitle">THE SOCIAL GOLF APP</div>
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div 
-                className="avatar" 
-                id="avatar"
-                title="Click to sign out"
-                onClick={() => { if(confirm("Are you sure you want to sign out?")) supabase.auth.signOut(); }}
-              >
+            <div className="app-header-right" onClick={() => { if(confirm("Are you sure you want to sign out?")) supabase.auth.signOut(); }}>
+              <div className="avatar" id="avatar">
                 {profile?.initials || 'RQ'}
               </div>
               {isPro && <div className="pro-badge-top">PRO</div>}
-              <button 
-                className="logout-btn"
-                onClick={() => { if(confirm("Are you sure you want to sign out?")) supabase.auth.signOut(); }}
-              >
-                ↪ OUT
-              </button>
             </div>
           </div>
 
