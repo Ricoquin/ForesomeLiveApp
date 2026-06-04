@@ -300,6 +300,7 @@ export default function App() {
     if (!session?.user) return;
 
     const roundData = {
+      id: crypto.randomUUID(),
       user_id: session.user.id,
       course_name: quickCourse,
       tee: quickTee,
@@ -417,6 +418,7 @@ export default function App() {
     const totalGir = holeScores.reduce((acc, h) => acc + (h.gir ? 1 : 0), 0);
 
     const roundData = {
+      id: crypto.randomUUID(),
       user_id: session.user.id,
       course_name: selectedCourse.name || 'Shoal Creek',
       tee: selectedTee,
@@ -487,6 +489,7 @@ export default function App() {
     const totalScore = reviewScores.reduce((acc, s) => acc + Number(s || 0), 0);
     // Mock review stats totals
     const roundData = {
+      id: crypto.randomUUID(),
       user_id: session.user.id,
       course_name: reviewCourse,
       tee: reviewTee,
