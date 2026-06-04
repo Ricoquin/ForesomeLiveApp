@@ -142,6 +142,7 @@ export default function App() {
   const [selectedTee, setSelectedTee] = useState('Blue');
   const [showEor, setShowEor] = useState(false);
   const [holeStatView, setHoleStatView] = useState('score');
+  const [intelView, setIntelView] = useState('rounds'); // 'rounds' | 'lastRound'
 
   // Active course data — recalculates when selectedCourse changes
   const activeCourseData = getCourseData(selectedCourse);
@@ -1312,11 +1313,67 @@ export default function App() {
 
           <div style={{ padding: '0 16px' }}>
             <div className="section-head" style={{ padding: '8px 4px' }}>
-              <span className="section-title">▸ Last Round · Hole by Hole</span>
-              <a className="section-link" href="#" onClick={(e) => e.preventDefault()}>ALL ROUNDS</a>
+              <span className="section-title">▸ Round History</span>
+            </div>
+            <div style={{ display: 'flex', gap: '6px', margin: '0 0 10px' }}>
+              <button
+                className={`hole-stat-btn ${intelView === 'rounds' ? 'active' : ''}`}
+                onClick={() => setIntelView('rounds')}
+              >ALL ROUNDS</button>
+              <button
+                className={`hole-stat-btn ${intelView === 'lastRound' ? 'active' : ''}`}
+                onClick={() => setIntelView('lastRound')}
+              >LAST ROUND</button>
             </div>
           </div>
 
+          {intelView === 'rounds' && (
+            <div style={{ padding: '0 16px 16px' }}>
+              {loadingRounds ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '24px', fontFamily: 'var(--mono)', fontSize: '11px' }}>Loading rounds...</div>
+              ) : savedRounds.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '24px', fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '0.05em' }}>No rounds logged yet. Go play!</div>
+              ) : (
+                savedRounds.map((r, idx) => {
+                  const score = r.summary?.score || 0;
+                  const coursePar = courses.find(c => c.name === r.course_name)?.par || 72;
+                  const diff = score - Number(coursePar);
+                  const diffText = diff === 0 ? 'E' : diff > 0 ? `+${diff}` : `${diff}`;
+                  const dateStr = new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  return (
+                    <div key={r.id || idx} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '12px 14px', marginBottom: '6px',
+                      background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+                      borderRadius: '10px', cursor: 'pointer'
+                    }}>
+                      <div>
+                        <div style={{ fontFamily: 'var(--heading)', fontSize: '13px', color: 'var(--cream)', fontWeight: 600 }}>
+                          {r.course_name}
+                        </div>
+                        <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--text-dim)', letterSpacing: '0.05em', marginTop: '2px' }}>
+                          {dateStr} · {r.tee || 'Blue'} · {r.completed_holes || 18}H
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontFamily: 'var(--heading)', fontSize: '22px', color: 'var(--cream)', fontWeight: 700, lineHeight: 1 }}>
+                          {score}
+                        </div>
+                        <div style={{
+                          fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '0.05em', marginTop: '2px',
+                          color: diff < 0 ? 'var(--green)' : diff > 0 ? '#e74c3c' : 'var(--text-dim)'
+                        }}>
+                          {diffText}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          {intelView === 'lastRound' && (
           <div className="hole-grid-wrap">
             <div className="hole-grid-head">
               <div>
@@ -1415,6 +1472,7 @@ export default function App() {
               );
             })()}
           </div>
+          )}
         </div>
 
         {/* ============== SNAP INTRO SCREEN ============== */}
