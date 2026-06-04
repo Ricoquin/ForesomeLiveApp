@@ -129,6 +129,8 @@ export default function App() {
   const [authMode, setAuthMode] = useState('login'); // 'login' | 'signup'
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
+  const [showInstallCard, setShowInstallCard] = useState(false);
+  const deferredPromptRef = useRef(null);
 
   // App navigation state
   const [screen, setScreen] = useState('home'); // 'home', 'chat', 'snap-intro', 'log', 'stats', 'camera', 'review', 'paywall'
@@ -241,7 +243,17 @@ export default function App() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Capture PWA install prompt
+    const handleBeforeInstall = (e) => {
+      e.preventDefault();
+      deferredPromptRef.current = e;
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+    };
   }, []);
 
   const fetchProfile = async (userId) => {
@@ -320,7 +332,8 @@ export default function App() {
           if (profileError) {
             console.error('Error saving profile:', profileError);
           }
-          alert('Registration Successful! Welcome to ForeSome!');
+          // Show install card instead of alert
+          setShowInstallCard(true);
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
@@ -693,6 +706,92 @@ export default function App() {
             <div className="auth-footer">
               KC METRO · FOR ALL GOLFERS · V0.1
             </div>
+
+            {/* Install App Card — shows after signup or when install is available */}
+            {showInstallCard && (
+              <div style={{
+                position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                background: 'rgba(10, 18, 14, 0.92)', backdropFilter: 'blur(12px)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                zIndex: 9999, padding: '24px'
+              }}>
+                <div style={{
+                  background: 'linear-gradient(135deg, #243d2c, #1a2c20)',
+                  border: '1px solid rgba(184, 154, 92, 0.3)',
+                  borderRadius: '20px', padding: '28px 24px', maxWidth: '340px',
+                  width: '100%', textAlign: 'center',
+                  boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
+                }}>
+                  <div style={{ fontSize: '48px', marginBottom: '12px' }}>🏌️</div>
+                  <div style={{
+                    fontFamily: 'var(--display)', fontSize: '22px', fontWeight: 700,
+                    color: 'var(--cream)', marginBottom: '6px'
+                  }}>Welcome to ForeSome!</div>
+                  <div style={{
+                    fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--text-dim)',
+                    letterSpacing: '0.05em', marginBottom: '20px', lineHeight: 1.5
+                  }}>
+                    Your account is ready. Install the app on your phone for the best experience.
+                  </div>
+
+                  {/* Native install prompt (Chrome/Edge/Android) */}
+                  {deferredPromptRef.current && (
+                    <button
+                      onClick={async () => {
+                        const prompt = deferredPromptRef.current;
+                        if (prompt) {
+                          prompt.prompt();
+                          const result = await prompt.userChoice;
+                          if (result.outcome === 'accepted') {
+                            deferredPromptRef.current = null;
+                          }
+                        }
+                        setShowInstallCard(false);
+                      }}
+                      style={{
+                        width: '100%', padding: '16px', border: 'none', borderRadius: '12px',
+                        background: 'linear-gradient(135deg, #b89a5c 0%, #8a7240 100%)',
+                        color: '#1a2c20', fontFamily: 'var(--mono)', fontSize: '12px',
+                        fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase',
+                        cursor: 'pointer', marginBottom: '10px',
+                        boxShadow: '0 8px 24px rgba(184, 154, 92, 0.35)'
+                      }}
+                    >📲 INSTALL FORESOME</button>
+                  )}
+
+                  {/* iOS Safari instructions (no beforeinstallprompt) */}
+                  {!deferredPromptRef.current && (
+                    <div style={{
+                      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: '12px', padding: '14px', marginBottom: '10px'
+                    }}>
+                      <div style={{
+                        fontFamily: 'var(--mono)', fontSize: '10px', fontWeight: 700,
+                        color: 'var(--gold)', letterSpacing: '0.1em', marginBottom: '8px'
+                      }}>INSTALL ON iPHONE</div>
+                      <div style={{
+                        fontFamily: 'var(--body)', fontSize: '12px', color: 'var(--text-dim)',
+                        lineHeight: 1.6, textAlign: 'left'
+                      }}>
+                        1. Tap the <b style={{ color: 'var(--cream)' }}>Share</b> button <span style={{ fontSize: '14px' }}>⬆️</span><br/>
+                        2. Scroll down, tap <b style={{ color: 'var(--cream)' }}>Add to Home Screen</b><br/>
+                        3. Tap <b style={{ color: 'var(--cream)' }}>Add</b> — done!
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => setShowInstallCard(false)}
+                    style={{
+                      width: '100%', padding: '14px', background: 'transparent',
+                      border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px',
+                      color: 'var(--text-dim)', fontFamily: 'var(--mono)', fontSize: '11px',
+                      letterSpacing: '0.1em', cursor: 'pointer'
+                    }}
+                  >CONTINUE TO APP →</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
