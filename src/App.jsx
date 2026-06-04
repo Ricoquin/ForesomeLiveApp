@@ -715,6 +715,7 @@ export default function App() {
                     className="course-search-item"
                     onClick={() => {
                       setSelectedCourse(c);
+                      setQuickCourse(c.name);
                       setCourseSearchQuery('');
                       setCourseSearchOpen(false);
                       setScreen('log');
@@ -729,7 +730,7 @@ export default function App() {
           </div>
 
           <div className="card-list">
-            <div className="tee-card" onClick={() => { setSelectedCourse(courses.find(c => c.name.includes("Swope")) || courses[0]); setScreen('log'); }}>
+            <div className="tee-card" onClick={() => { const c = courses.find(c => c.name.includes("Swope")) || courses[0]; setSelectedCourse(c); setQuickCourse(c.name); setScreen('log'); }}>
               <div className="card-header">
                 <div>
                   <div className="course-name">Swope Memorial</div>
@@ -752,7 +753,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="tee-card" onClick={() => { setSelectedCourse(courses.find(c => c.name.includes("Heart")) || courses[0]); setScreen('log'); }}>
+            <div className="tee-card" onClick={() => { const c = courses.find(c => c.name.includes("Heart")) || courses[0]; setSelectedCourse(c); setQuickCourse(c.name); setScreen('log'); }}>
               <div className="card-header">
                 <div>
                   <div className="course-name">Heart of America</div>
@@ -775,7 +776,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="tee-card" onClick={() => { setSelectedCourse(courses.find(c => c.name.includes("Tiffany")) || courses[0]); setScreen('log'); }}>
+            <div className="tee-card" onClick={() => { const c = courses.find(c => c.name.includes("Tiffany")) || courses[0]; setSelectedCourse(c); setQuickCourse(c.name); setScreen('log'); }}>
               <div className="card-header">
                 <div>
                   <div className="course-name">Tiffany Greens</div>
