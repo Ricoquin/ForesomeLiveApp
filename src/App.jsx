@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import courses from './data/courses.json';
+import apiScorecards from './data/api_scorecards.json';
 import foresomeLogo from './assets/foresome-logo.png';
 
 // Foursome mock cards
@@ -57,6 +58,17 @@ const REAL_SCORECARDS = {
   }
 };
 
+// Generate yardage estimates based on par values
+function generateYards(pars) {
+  const yardRanges = { 3: [145, 200], 4: [350, 440], 5: [500, 560] };
+  return pars.map((p, i) => {
+    const [min, max] = yardRanges[p] || yardRanges[4];
+    // Use hole index as seed for consistent yardage per course
+    const t = ((i * 7 + 3) % 17) / 17;
+    return Math.round((min + t * (max - min)) / 5) * 5;
+  });
+}
+
 // Fallback: generate approximate data from a course's total par
 function generateCourseData(course) {
   const totalPar = parseInt(course?.par) || 72;
@@ -68,32 +80,38 @@ function generateCourseData(course) {
     73: [4, 5, 3, 4, 4, 3, 5, 4, 5,   4, 3, 5, 4, 4, 3, 5, 4, 4],
   };
   const pars = parTemplates[totalPar] || parTemplates[72];
-
-  const yardRanges = { 3: [140, 210], 4: [350, 450], 5: [490, 570] };
-  const yards = pars.map(p => {
-    const [min, max] = yardRanges[p];
-    return Math.round((min + Math.random() * (max - min)) / 5) * 5;
-  });
-
   const hcps = [7, 11, 15, 5, 1, 17, 9, 13, 3, 8, 16, 12, 4, 2, 18, 10, 14, 6];
 
   return {
     name: course?.name || 'Unknown Course',
     pars,
-    yards,
+    yards: generateYards(pars),
     hcps
   };
 }
 
-// Return real scorecard if available, otherwise generate approximate data
+// Lookup priority: REAL_SCORECARDS (verified + yardage) > API scorecards (par + hcp) > template fallback
 const courseDataCache = {};
 function getCourseData(course) {
   if (!course) return generateCourseData(course);
   if (!courseDataCache[course.id]) {
+    // 1. Hand-verified scorecards with real yardage
     const real = REAL_SCORECARDS[course.name];
     if (real) {
       courseDataCache[course.id] = { name: course.name, ...real };
-    } else {
+    }
+    // 2. OpenGolf API scorecards (par + handicap, generated yardage)
+    else if (apiScorecards[course.name]) {
+      const api = apiScorecards[course.name];
+      courseDataCache[course.id] = {
+        name: course.name,
+        pars: api.pars,
+        yards: generateYards(api.pars),
+        hcps: api.hcps
+      };
+    }
+    // 3. Template fallback
+    else {
       courseDataCache[course.id] = generateCourseData(course);
     }
   }
