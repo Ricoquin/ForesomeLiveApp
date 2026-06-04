@@ -3671,6 +3671,9 @@ body {
   height: auto;
   flex-shrink: 0;
   filter: drop-shadow(0 1px 3px rgba(0,0,0,0.2));
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 2px;
 }
 
 /* ---- App Header Title/Subtitle ---- */
@@ -3711,6 +3714,9 @@ body {
   margin: 0 auto 16px;
   display: block;
   filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 8px;
 }
 .auth-tagline {
   font-family: var(--display);
