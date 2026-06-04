@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import courses from './data/courses.json';
 import apiScorecards from './data/api_scorecards.json';
-import foresomeLogo from './assets/foresome-logo.png';
+import foresomeLogo from './assets/foresome-logo.svg';
 
 // Foursome mock cards
 const cards = [
