@@ -21,13 +21,46 @@ const cards = [
   }
 ];
 
-// Shoal Creek scorecard details
-// Generate realistic hole-by-hole data from a course's total par
+// ── Real scorecard database for KC metro courses ──
+// Verified hole-by-hole data: par, yardage (blue/back tees), handicap
+const REAL_SCORECARDS = {
+  // Shoal Creek Golf Course — Par 71, 6983 yds (Gold tees)
+  'Shoal Creek Golf Course': {
+    pars:  [4, 4, 3, 4, 3, 4, 5, 4, 5,  4, 3, 4, 5, 4, 4, 4, 3, 4],
+    yards: [426, 427, 195, 418, 234, 364, 579, 447, 536,  388, 214, 360, 527, 420, 434, 352, 198, 464],
+    hcps:  [3, 15, 13, 7, 11, 17, 1, 5, 9,  10, 14, 16, 4, 6, 8, 18, 12, 2]
+  },
+  // Swope Memorial Golf Course — Par 72, 6274 yds (Blue tees)
+  'Swope Memorial Golf Course': {
+    pars:  [4, 4, 4, 4, 5, 3, 4, 3, 5,  4, 4, 5, 3, 4, 4, 3, 5, 4],
+    yards: [372, 317, 267, 368, 451, 172, 330, 167, 477,  384, 361, 504, 235, 416, 349, 134, 566, 404],
+    hcps:  [3, 13, 17, 1, 5, 11, 15, 9, 7,  6, 12, 10, 16, 2, 14, 18, 8, 4]
+  },
+  // Heart Of America Golf Academy River Course — 9-hole, Par 35, 2604 yds
+  // Doubled to 18 for tracker compatibility (play front nine twice)
+  'Heart Of America Golf Academy River Course': {
+    pars:  [4, 4, 3, 4, 4, 4, 5, 3, 4,  4, 4, 3, 4, 4, 4, 5, 3, 4],
+    yards: [282, 374, 176, 295, 256, 221, 482, 138, 380,  282, 374, 176, 295, 256, 221, 482, 138, 380],
+    hcps:  [3, 1, 7, 5, 9, 13, 11, 17, 15,  4, 2, 8, 6, 10, 14, 12, 18, 16]
+  },
+  // Tiffany Greens Golf Club — Par 72, 7055 yds (Back tees)
+  'Tiffany Greens Golf Club': {
+    pars:  [5, 4, 4, 3, 4, 3, 4, 4, 5,  3, 5, 4, 4, 4, 3, 5, 4, 4],
+    yards: [537, 385, 425, 199, 370, 234, 410, 430, 575,  188, 540, 426, 400, 370, 195, 535, 415, 421],
+    hcps:  [7, 9, 1, 11, 15, 13, 17, 3, 5,  10, 14, 6, 2, 18, 12, 8, 16, 4]
+  },
+  // Hodge Park Golf Club — Par 70, 6050 yds (Blue tees)
+  'Hodge Park Golf Club': {
+    pars:  [4, 4, 3, 4, 4, 4, 3, 4, 4,  4, 5, 3, 4, 4, 4, 3, 5, 4],
+    yards: [414, 337, 155, 442, 438, 281, 164, 399, 392,  391, 459, 186, 388, 260, 328, 180, 518, 318],
+    hcps:  [3, 17, 13, 7, 1, 15, 11, 9, 5,  4, 14, 10, 2, 18, 8, 6, 12, 16]
+  }
+};
+
+// Fallback: generate approximate data from a course's total par
 function generateCourseData(course) {
   const totalPar = parseInt(course?.par) || 72;
-  const numHoles = parseInt(course?.holes) || 18;
-  
-  // Standard par distribution for 18 holes based on total par
+
   const parTemplates = {
     70: [4, 4, 3, 4, 4, 3, 5, 4, 4,   4, 3, 4, 4, 3, 5, 4, 4, 3],
     71: [4, 5, 3, 4, 4, 3, 5, 4, 4,   4, 3, 4, 4, 3, 5, 4, 4, 3],
@@ -35,31 +68,34 @@ function generateCourseData(course) {
     73: [4, 5, 3, 4, 4, 3, 5, 4, 5,   4, 3, 5, 4, 4, 3, 5, 4, 4],
   };
   const pars = parTemplates[totalPar] || parTemplates[72];
-  
-  // Generate yards based on par
+
   const yardRanges = { 3: [140, 210], 4: [350, 450], 5: [490, 570] };
   const yards = pars.map(p => {
     const [min, max] = yardRanges[p];
     return Math.round((min + Math.random() * (max - min)) / 5) * 5;
   });
-  
-  // Standard HCP allocation
+
   const hcps = [7, 11, 15, 5, 1, 17, 9, 13, 3, 8, 16, 12, 4, 2, 18, 10, 14, 6];
-  
+
   return {
     name: course?.name || 'Unknown Course',
-    pars: pars.slice(0, numHoles),
-    yards: yards.slice(0, numHoles),
-    hcps: hcps.slice(0, numHoles)
+    pars,
+    yards,
+    hcps
   };
 }
 
-// Seed the random so each course gets consistent data per session
+// Return real scorecard if available, otherwise generate approximate data
 const courseDataCache = {};
 function getCourseData(course) {
   if (!course) return generateCourseData(course);
   if (!courseDataCache[course.id]) {
-    courseDataCache[course.id] = generateCourseData(course);
+    const real = REAL_SCORECARDS[course.name];
+    if (real) {
+      courseDataCache[course.id] = { name: course.name, ...real };
+    } else {
+      courseDataCache[course.id] = generateCourseData(course);
+    }
   }
   return courseDataCache[course.id];
 }
