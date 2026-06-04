@@ -702,6 +702,61 @@ export default function App() {
               </button>
             </div>
 
+            {/* Install App Section — always visible on auth screen */}
+            <div style={{
+              margin: '16px 24px', padding: '18px 16px',
+              background: 'linear-gradient(135deg, rgba(184, 154, 92, 0.08), rgba(184, 154, 92, 0.02))',
+              border: '1px solid rgba(184, 154, 92, 0.2)',
+              borderRadius: '14px'
+            }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px'
+              }}>
+                <span style={{ fontSize: '20px' }}>📲</span>
+                <span style={{
+                  fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700,
+                  color: 'var(--gold)', letterSpacing: '0.12em'
+                }}>GET THE APP</span>
+              </div>
+
+              <div style={{
+                fontFamily: 'var(--body)', fontSize: '12px', color: 'var(--text-dim)',
+                lineHeight: 1.5, marginBottom: '12px'
+              }}>
+                Install ForeSome on your phone for the full experience — works like a real app, no app store needed.
+              </div>
+
+              {deferredPromptRef.current ? (
+                <button
+                  onClick={async () => {
+                    const prompt = deferredPromptRef.current;
+                    if (prompt) {
+                      prompt.prompt();
+                      const result = await prompt.userChoice;
+                      if (result.outcome === 'accepted') {
+                        deferredPromptRef.current = null;
+                      }
+                    }
+                  }}
+                  style={{
+                    width: '100%', padding: '12px', border: 'none', borderRadius: '10px',
+                    background: 'linear-gradient(135deg, #b89a5c 0%, #8a7240 100%)',
+                    color: '#1a2c20', fontFamily: 'var(--mono)', fontSize: '11px',
+                    fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+                    cursor: 'pointer', boxShadow: '0 4px 16px rgba(184, 154, 92, 0.3)'
+                  }}
+                >INSTALL FORESOME</button>
+              ) : (
+                <div style={{
+                  fontFamily: 'var(--body)', fontSize: '11px', color: 'var(--text-dim)',
+                  lineHeight: 1.6
+                }}>
+                  <b style={{ color: 'var(--cream)' }}>iPhone:</b> Tap <b style={{ color: 'var(--cream)' }}>Share</b> ⬆️ → <b style={{ color: 'var(--cream)' }}>Add to Home Screen</b><br/>
+                  <b style={{ color: 'var(--cream)' }}>Android:</b> Tap <b style={{ color: 'var(--cream)' }}>⋮</b> → <b style={{ color: 'var(--cream)' }}>Install app</b>
+                </div>
+              )}
+            </div>
+
             {/* Footer */}
             <div className="auth-footer">
               KC METRO · FOR ALL GOLFERS · V0.1
