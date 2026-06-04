@@ -4,23 +4,7 @@ import courses from './data/courses.json';
 import apiScorecards from './data/api_scorecards.json';
 import foresomeLogo from './assets/foresome-logo.png';
 
-// Foursome mock cards
-const cards = [
-  {
-    course: 'Oak Ridge GC',
-    meta: '4 players · competition',
-    time: '8:20',
-    date: 'Fri · 6/5',
-    players: ['KM', 'EA', 'JR', '+1']
-  },
-  {
-    course: 'Blue Valley',
-    meta: '3 players · casual',
-    time: '11:45',
-    date: 'Sat · 6/6',
-    players: ['AC', 'TB', 'SM', '+1']
-  }
-];
+
 
 // ── Real scorecard database for KC metro courses ──
 // Verified hole-by-hole data: par, yardage (blue/back tees), handicap
@@ -138,6 +122,17 @@ export default function App() {
   const [savedRounds, setSavedRounds] = useState([]);
   const [loadingRounds, setLoadingRounds] = useState(false);
 
+  // Player system state
+  const [foursomePlayers, setFoursomePlayers] = useState([]); // [{id, username, initials, handicap, bio, status}]
+  const [showPlayerSearch, setShowPlayerSearch] = useState(false);
+  const [playerSearchQuery, setPlayerSearchQuery] = useState('');
+  const [playerSearchResults, setPlayerSearchResults] = useState([]);
+  const [playerSearchLoading, setPlayerSearchLoading] = useState(false);
+  const [friends, setFriends] = useState([]);
+  const [pendingInvites, setPendingInvites] = useState([]);
+  const [sentInvites, setSentInvites] = useState([]);
+  const [showFriendsList, setShowFriendsList] = useState(false);
+
   // Manual Tracker State
   const [currentHole, setCurrentHole] = useState(1);
   const [selectedCourse, setSelectedCourse] = useState(courses.find(c => c.name.includes("Shoal Creek")) || courses[0]);
@@ -196,17 +191,7 @@ export default function App() {
   }, []);
 
   // Chat State
-  const [chatMessages, setChatMessages] = useState([
-    { sender: 'TJ', text: "Sat's locked in. Tee at 7:42. Who's bringing the bourbon this time", isMe: false, time: 'YESTERDAY · 6:24 PM' },
-    { sender: 'KEITH', text: "Not my turn. Rico still owes me from Swope 😤", isMe: false },
-    { sender: 'YOU', text: "Fine fine. Rieger's High Rye. But I'm not carrying anyone's bag on 14 again", isMe: true },
-    { sender: 'TJ', text: "That was ONE TIME and your back was fine 💀", isMe: false },
-    { system: true, text: "⛳ COURSE INTEL · Greens running 11 on stimp this week per 8 ForeSome rounds", time: 'TODAY · 8:14 AM' },
-    { sender: 'KEITH', text: "11?? cool cool cool I'm gonna 4-putt every hole", isMe: false },
-    { sender: 'YOU', text: "Need one more — anyone know a 12 hcap who isn't allergic to fun?", isMe: true },
-    { sender: 'TJ', text: "Posted it to the KC feed. ForeSome bot says 3 matches in the area 👀", isMe: false },
-    { system: true, text: "🎯 1 PLAYER REQUESTED TO JOIN · Tap to review" }
-  ]);
+  const [chatMessages, setChatMessages] = useState([]);
   const [chatInputText, setChatInputText] = useState('');
 
   // Camera Scanning simulation state
@@ -219,8 +204,7 @@ export default function App() {
   const [reviewDate, setReviewDate] = useState('2026-05-17');
   const [reviewTotalPar, setReviewTotalPar] = useState(71);
   // Default Shoal Creek review scores:
-  const [reviewScores, setReviewScores] = useState([4, 5, 3, 5, 5, 4, 6, 4, 5, 4, 4, 6, 5, 5, 3, 6, 4, 6]); 
-  const [reviewScoresTj, setReviewScoresTj] = useState([4, 6, 4, 4, 5, 3, 5, 5, 4, 5, 4, 6, 4, 4, 4, 5, 4, 6]);
+  const [reviewScores, setReviewScores] = useState([4, 5, 3, 5, 5, 4, 6, 4, 5, 4, 4, 6, 5, 5, 3, 6, 4, 6]);
 
   // Auth setup useEffect
   useEffect(() => {
@@ -286,6 +270,205 @@ export default function App() {
       setSavedRounds(data || []);
     }
     setLoadingRounds(false);
+  };
+
+  // ── Player Search & Invite System ──
+  const searchPlayers = async (query) => {
+    if (!query || query.length < 2) { setPlayerSearchResults([]); return; }
+    setPlayerSearchLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, username, initials, handicap, bio')
+        .ilike('username', `%${query}%`)
+        .neq('id', session?.user?.id || '')
+        .limit(10);
+      if (!error) setPlayerSearchResults(data || []);
+    } catch (e) { console.error(e); }
+    setPlayerSearchLoading(false);
+  };
+
+  // Debounced search
+  useEffect(() => {
+    if (!showPlayerSearch) return;
+    const timer = setTimeout(() => searchPlayers(playerSearchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [playerSearchQuery, showPlayerSearch]);
+
+  const fetchFriends = async () => {
+    if (!session?.user?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('friends')
+        .select('*')
+        .or(`user_id.eq.${session.user.id},friend_id.eq.${session.user.id}`);
+      if (!error && data) {
+        // Get profile info for each friend
+        const friendIds = data.map(f => f.user_id === session.user.id ? f.friend_id : f.user_id);
+        if (friendIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, username, initials, handicap, bio')
+            .in('id', friendIds);
+          setFriends(data.map(f => {
+            const fId = f.user_id === session.user.id ? f.friend_id : f.user_id;
+            const prof = (profiles || []).find(p => p.id === fId);
+            return { ...f, profile: prof };
+          }));
+        } else {
+          setFriends([]);
+        }
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const fetchInvites = async () => {
+    if (!session?.user?.id) return;
+    try {
+      // Invites received
+      const { data: incoming } = await supabase
+        .from('invites')
+        .select('*')
+        .eq('to_user_id', session.user.id)
+        .eq('status', 'pending');
+      // Get sender profiles
+      if (incoming && incoming.length > 0) {
+        const senderIds = incoming.map(i => i.from_user_id);
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, username, initials, handicap, bio')
+          .in('id', senderIds);
+        setPendingInvites(incoming.map(inv => ({
+          ...inv,
+          fromProfile: (profiles || []).find(p => p.id === inv.from_user_id)
+        })));
+      } else {
+        setPendingInvites([]);
+      }
+
+      // Invites sent
+      const { data: outgoing } = await supabase
+        .from('invites')
+        .select('*')
+        .eq('from_user_id', session.user.id)
+        .in('status', ['pending', 'accepted']);
+      if (outgoing && outgoing.length > 0) {
+        const toIds = outgoing.map(i => i.to_user_id);
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, username, initials, handicap, bio')
+          .in('id', toIds);
+        setSentInvites(outgoing.map(inv => ({
+          ...inv,
+          toProfile: (profiles || []).find(p => p.id === inv.to_user_id)
+        })));
+        // Auto-populate foursome with accepted invites
+        const accepted = outgoing.filter(i => i.status === 'accepted');
+        if (accepted.length > 0) {
+          const acceptedProfiles = accepted.map(inv => {
+            const prof = (profiles || []).find(p => p.id === inv.to_user_id);
+            return prof ? { ...prof, status: 'confirmed' } : null;
+          }).filter(Boolean);
+          setFoursomePlayers(prev => {
+            const existingIds = prev.map(p => p.id);
+            const newPlayers = acceptedProfiles.filter(p => !existingIds.includes(p.id));
+            return [...prev, ...newPlayers].slice(0, 3);
+          });
+        }
+      } else {
+        setSentInvites([]);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  // Fetch friends and invites when session loads
+  useEffect(() => {
+    if (session?.user?.id) {
+      fetchFriends();
+      fetchInvites();
+    }
+  }, [session?.user?.id]);
+
+  const sendInvite = async (toUserId) => {
+    if (!session?.user?.id) return;
+    try {
+      const { error } = await supabase.from('invites').insert([{
+        from_user_id: session.user.id,
+        to_user_id: toUserId,
+        course_name: selectedCourse?.name || 'TBD',
+        tee_time: '',
+        tee_date: '',
+        message: `${profile?.username || 'A player'} wants you to join their foursome!`,
+        status: 'pending'
+      }]);
+      if (!error) {
+        alert('Invite sent!');
+        fetchInvites();
+      } else {
+        alert('Could not send invite: ' + error.message);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const acceptInvite = async (inviteId) => {
+    try {
+      const { error } = await supabase
+        .from('invites')
+        .update({ status: 'accepted' })
+        .eq('id', inviteId);
+      if (!error) fetchInvites();
+    } catch (e) { console.error(e); }
+  };
+
+  const declineInvite = async (inviteId) => {
+    try {
+      const { error } = await supabase
+        .from('invites')
+        .update({ status: 'declined' })
+        .eq('id', inviteId);
+      if (!error) fetchInvites();
+    } catch (e) { console.error(e); }
+  };
+
+  const sendFriendRequest = async (friendId) => {
+    if (!session?.user?.id) return;
+    try {
+      const { error } = await supabase.from('friends').insert([{
+        user_id: session.user.id,
+        friend_id: friendId,
+        status: 'pending'
+      }]);
+      if (!error) {
+        alert('Friend request sent!');
+        fetchFriends();
+      } else {
+        if (error.message.includes('duplicate')) {
+          alert('Friend request already sent!');
+        } else {
+          alert('Could not send request: ' + error.message);
+        }
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const acceptFriend = async (friendshipId) => {
+    try {
+      const { error } = await supabase
+        .from('friends')
+        .update({ status: 'accepted' })
+        .eq('id', friendshipId);
+      if (!error) fetchFriends();
+    } catch (e) { console.error(e); }
+  };
+
+  const removeFromFoursome = (playerId) => {
+    setFoursomePlayers(prev => prev.filter(p => p.id !== playerId));
+  };
+
+  const addToFoursome = (player) => {
+    if (foursomePlayers.length >= 3) { alert('Foursome is full (4 players max including you)'); return; }
+    if (foursomePlayers.find(p => p.id === player.id)) { alert('Player already in foursome'); return; }
+    setFoursomePlayers(prev => [...prev, { ...player, status: 'confirmed' }]);
   };
 
   const handleAuth = async () => {
@@ -447,16 +630,9 @@ export default function App() {
   else if (currentDiff === 2) { stepperLabel = 'DOUBLE'; stepperResult = '+2'; stepperClass += ' double'; }
   else if (currentDiff >= 3) { stepperLabel = `+${currentDiff}`; stepperResult = `+${currentDiff}`; stepperClass += ' double'; }
 
-  // Foursome score projection calculations
+  // Foursome score calculation
   const youScore = played === 0 ? 0 : runningTotal;
-  const tjScore = played === 0 ? 0 : runningTotal + 1;
-  const keithScore = played === 0 ? 0 : runningTotal - 2;
-  const eScore = played === 0 ? 0 : runningTotal + 2;
-
   const youDiff = vsParDiff;
-  const tjDiff = vsParDiff + 1;
-  const keithDiff = vsParDiff - 2;
-  const eDiff = vsParDiff + 2;
 
   const getDiffText = (diff) => {
     if (diff === 0) return 'E';
@@ -887,20 +1063,91 @@ export default function App() {
             </div>
           </div>
 
+          {/* Pending Invites Banner */}
+          {pendingInvites.length > 0 && (
+            <div className="section-head">
+              <span className="section-title">▸ Incoming Invites</span>
+              <span className="section-link">{pendingInvites.length} NEW</span>
+            </div>
+          )}
+          {pendingInvites.map(inv => (
+            <div key={inv.id} className="invite-banner">
+              <div className="invite-banner-content">
+                <div className="player-dot filled">{inv.fromProfile?.initials || '??'}</div>
+                <div className="invite-banner-text">
+                  <div className="invite-banner-name">{inv.fromProfile?.username || 'Someone'}</div>
+                  <div className="invite-banner-detail">Invited you to play at {inv.course_name}</div>
+                </div>
+              </div>
+              <div className="invite-banner-actions">
+                <button className="invite-accept-btn" onClick={() => acceptInvite(inv.id)}>✓ JOIN</button>
+                <button className="invite-decline-btn" onClick={() => declineInvite(inv.id)}>✗</button>
+              </div>
+            </div>
+          ))}
+
+          {/* Friend Requests */}
+          {friends.filter(f => f.status === 'pending' && f.friend_id === session?.user?.id).length > 0 && (
+            <div className="section-head">
+              <span className="section-title">▸ Friend Requests</span>
+            </div>
+          )}
+          {friends.filter(f => f.status === 'pending' && f.friend_id === session?.user?.id).map(f => (
+            <div key={f.id} className="invite-banner">
+              <div className="invite-banner-content">
+                <div className="player-dot filled">{f.profile?.initials || '??'}</div>
+                <div className="invite-banner-text">
+                  <div className="invite-banner-name">{f.profile?.username || 'Someone'}</div>
+                  <div className="invite-banner-detail">Wants to be your golf buddy</div>
+                </div>
+              </div>
+              <div className="invite-banner-actions">
+                <button className="invite-accept-btn" onClick={() => acceptFriend(f.id)}>✓ ACCEPT</button>
+              </div>
+            </div>
+          ))}
+
+          {/* Your Foursome */}
           <div className="section-head">
-            <span className="section-title">▸ Next Up · Tap to open Banter</span>
+            <span className="section-title">▸ Your Foursome</span>
+            <span className="section-link" onClick={() => setShowPlayerSearch(true)}>FIND PLAYERS →</span>
           </div>
 
-          <div className="hero-card" onClick={() => setScreen('chat')}>
-            <div className="hero-eyebrow">NEXT UP · SATURDAY FOURSOME</div>
-            <div className="hero-title" id="heroTitle">
-              Saturday at Shoal Creek<br />Looking for 1 more
+          <div className="foursome-roster">
+            {/* Slot 1: You */}
+            <div className="roster-slot filled">
+              <div className="roster-avatar you">{profile?.initials || 'ME'}</div>
+              <div className="roster-info">
+                <div className="roster-name">{profile?.username || 'You'}</div>
+                <div className="roster-detail">HCP {profile?.handicap || '–'} · You</div>
+              </div>
             </div>
-            <div className="hero-meta">
-              <span className="hero-time">7:42 AM</span>
-              <span className="hero-players">3 / 4 filled</span>
-              <span className="hero-hcap">HCP 8–14</span>
-            </div>
+
+            {/* Slots 2-4: Foursome players or empty */}
+            {[0, 1, 2].map(i => {
+              const player = foursomePlayers[i];
+              if (player) {
+                return (
+                  <div key={player.id} className="roster-slot filled">
+                    <div className="roster-avatar">{player.initials || '??'}</div>
+                    <div className="roster-info">
+                      <div className="roster-name">{player.username}</div>
+                      <div className="roster-detail">HCP {player.handicap || '–'} · {player.status === 'confirmed' ? '✓ Confirmed' : '⏳ Invited'}</div>
+                    </div>
+                    <button className="roster-remove" onClick={() => removeFromFoursome(player.id)}>✕</button>
+                  </div>
+                );
+              }
+              return (
+                <div key={`empty-${i}`} className="roster-slot empty" onClick={() => setShowPlayerSearch(true)}>
+                  <div className="roster-avatar-empty">+</div>
+                  <div className="roster-info">
+                    <div className="roster-name empty-label">Invite Player</div>
+                    <div className="roster-detail">Tap to search & invite</div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           <div className="section-head">
@@ -941,80 +1188,93 @@ export default function App() {
             )}
           </div>
 
-          <div className="card-list">
-            <div className="tee-card" onClick={() => { const c = courses.find(c => c.name.includes("Swope")) || courses[0]; setSelectedCourse(c); setQuickCourse(c.name); setScreen('log'); }}>
-              <div className="card-header">
-                <div>
-                  <div className="course-name">Swope Memorial</div>
-                  <div className="course-meta">PUBLIC · PAR 71 · KC, MO</div>
-                </div>
-                <div className="card-time-block">
-                  <div className="tee-time">9:18 AM</div>
-                  <div className="tee-date">SAT MAY 23</div>
-                </div>
+          {/* My Friends Quick Access */}
+          {friends.filter(f => f.status === 'accepted').length > 0 && (
+            <>
+              <div className="section-head">
+                <span className="section-title">▸ Friends</span>
               </div>
-              <div className="card-divider"></div>
-              <div className="footer">
-                <div className="players">
-                  <div className="player-dot filled">TJ</div>
-                  <div className="player-dot filled">K</div>
-                  <div className="player-dot empty">+</div>
-                  <div className="player-dot empty">+</div>
-                </div>
-                <span className="hcap-badge">HCP 6–18</span>
+              <div className="friends-quick-list">
+                {friends.filter(f => f.status === 'accepted').map(f => (
+                  <div key={f.id} className="friend-chip" onClick={() => {
+                    if (foursomePlayers.length < 3 && !foursomePlayers.find(p => p.id === f.profile?.id)) {
+                      sendInvite(f.profile?.id);
+                    }
+                  }}>
+                    <div className="player-dot filled">{f.profile?.initials || '??'}</div>
+                    <span>{f.profile?.username}</span>
+                  </div>
+                ))}
               </div>
-            </div>
-
-            <div className="tee-card" onClick={() => { const c = courses.find(c => c.name.includes("Heart")) || courses[0]; setSelectedCourse(c); setQuickCourse(c.name); setScreen('log'); }}>
-              <div className="card-header">
-                <div>
-                  <div className="course-name">Heart of America</div>
-                  <div className="course-meta">PUBLIC · PAR 72 · KC, MO</div>
-                </div>
-                <div className="card-time-block">
-                  <div className="tee-time">2:04 PM</div>
-                  <div className="tee-date">SUN MAY 24</div>
-                </div>
-              </div>
-              <div className="card-divider"></div>
-              <div className="footer">
-                <div className="players">
-                  <div className="player-dot filled">E</div>
-                  <div className="player-dot empty">+</div>
-                  <div className="player-dot empty">+</div>
-                  <div className="player-dot empty">+</div>
-                </div>
-                <span className="hcap-badge">OPEN HCP</span>
-              </div>
-            </div>
-
-            <div className="tee-card" onClick={() => { const c = courses.find(c => c.name.includes("Tiffany")) || courses[0]; setSelectedCourse(c); setQuickCourse(c.name); setScreen('log'); }}>
-              <div className="card-header">
-                <div>
-                  <div className="course-name">Tiffany Greens</div>
-                  <div className="course-meta">SEMI-PRIVATE · PAR 71 · KC, MO</div>
-                </div>
-                <div className="card-time-block">
-                  <div className="tee-time">7:00 AM</div>
-                  <div className="tee-date">MON MAY 25</div>
-                </div>
-              </div>
-              <div className="card-divider"></div>
-              <div className="footer">
-                <div className="players">
-                  <div className="player-dot filled">M</div>
-                  <div className="player-dot filled">J</div>
-                  <div className="player-dot filled">S</div>
-                  <div className="player-dot empty">+</div>
-                </div>
-                <span className="hcap-badge">HCP 0–10</span>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
 
           <div className="footer-note">
             <div>THE SOCIAL GOLF APP · <span className="accent">FOR ALL GOLFERS</span></div>
           </div>
+
+          {/* ===== PLAYER SEARCH MODAL ===== */}
+          {showPlayerSearch && (
+            <div className="player-search-overlay">
+              <div className="player-search-modal">
+                <div className="player-search-header">
+                  <span className="player-search-title">Find Players</span>
+                  <button className="player-search-close" onClick={() => { setShowPlayerSearch(false); setPlayerSearchQuery(''); setPlayerSearchResults([]); }}>✕</button>
+                </div>
+                <input
+                  type="text"
+                  className="player-search-input"
+                  placeholder="Search by username…"
+                  value={playerSearchQuery}
+                  onChange={(e) => setPlayerSearchQuery(e.target.value)}
+                  autoFocus
+                />
+                <div className="player-search-results">
+                  {playerSearchLoading && <div className="player-search-loading">Searching…</div>}
+                  {!playerSearchLoading && playerSearchQuery.length >= 2 && playerSearchResults.length === 0 && (
+                    <div className="player-search-empty">No players found</div>
+                  )}
+                  {playerSearchResults.map(p => {
+                    const isFriend = friends.find(f => (f.user_id === p.id || f.friend_id === p.id));
+                    const isInvited = sentInvites.find(i => i.to_user_id === p.id && i.status === 'pending');
+                    const isInFoursome = foursomePlayers.find(fp => fp.id === p.id);
+                    return (
+                      <div key={p.id} className="player-card">
+                        <div className="player-card-top">
+                          <div className="player-card-avatar">{p.initials || '??'}</div>
+                          <div className="player-card-info">
+                            <div className="player-card-name">{p.username}</div>
+                            <div className="player-card-hcp">HCP {p.handicap || '–'}</div>
+                          </div>
+                        </div>
+                        {p.bio && <div className="player-card-bio">{p.bio}</div>}
+                        <div className="player-card-actions">
+                          {isInFoursome ? (
+                            <button className="pc-btn disabled" disabled>IN FOURSOME</button>
+                          ) : isInvited ? (
+                            <button className="pc-btn disabled" disabled>INVITED ✓</button>
+                          ) : (
+                            <button className="pc-btn invite" onClick={() => { sendInvite(p.id); addToFoursome(p); }}>
+                              ⛳ INVITE TO FOURSOME
+                            </button>
+                          )}
+                          {isFriend ? (
+                            <button className="pc-btn disabled" disabled>
+                              {isFriend.status === 'accepted' ? 'FRIENDS ✓' : 'PENDING'}
+                            </button>
+                          ) : (
+                            <button className="pc-btn friend" onClick={() => sendFriendRequest(p.id)}>
+                              👋 ADD FRIEND
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ============== LOG SCREEN ============== */}
@@ -1233,21 +1493,20 @@ export default function App() {
               <div className="fs-score">{youScore}</div>
               <div className="fs-thru">{getDiffText(youDiff)} thru {played}</div>
             </div>
-            <div className="fs-chip">
-              <div className="fs-name">TJ</div>
-              <div className="fs-score">{tjScore}</div>
-              <div className="fs-thru">{getDiffText(tjDiff)} thru {played}</div>
-            </div>
-            <div className="fs-chip">
-              <div className="fs-name">Keith</div>
-              <div className="fs-score">{keithScore}</div>
-              <div className="fs-thru">{getDiffText(keithDiff)} thru {played}</div>
-            </div>
-            <div className="fs-chip">
-              <div className="fs-name">E</div>
-              <div className="fs-score">{eScore}</div>
-              <div className="fs-thru">{getDiffText(eDiff)} thru {played}</div>
-            </div>
+            {foursomePlayers.map(p => (
+              <div key={p.id} className="fs-chip">
+                <div className="fs-name">{p.username?.split(' ')[0] || p.initials}</div>
+                <div className="fs-score">–</div>
+                <div className="fs-thru">awaiting</div>
+              </div>
+            ))}
+            {[...Array(Math.max(0, 3 - foursomePlayers.length))].map((_, i) => (
+              <div key={`empty-fs-${i}`} className="fs-chip empty-chip" onClick={() => setShowPlayerSearch(true)}>
+                <div className="fs-name">+</div>
+                <div className="fs-score">–</div>
+                <div className="fs-thru">invite</div>
+              </div>
+            ))}
           </div>
 
           <div className="pro-nudge" onClick={() => setScreen('paywall')}>
@@ -1363,14 +1622,20 @@ export default function App() {
             <button className="back-btn" onClick={() => setScreen('home')}>← BACK</button>
           </div>
           <div className="chat-header">
-            <div className="chat-course">Shoal Creek · Saturday Foursome</div>
-            <div className="chat-meta">SAT MAY 23 · 7:42 AM · BLUE TEES</div>
+            <div className="chat-course">{selectedCourse?.name || 'Foursome'} · Banter</div>
+            <div className="chat-meta">{foursomePlayers.length + 1} / 4 PLAYERS</div>
             <div className="chat-foursome">
-              <div className="player-dot filled">{profile?.initials || 'RQ'}</div>
-              <div className="player-dot filled">TJ</div>
-              <div className="player-dot filled">K</div>
-              <div className="player-dot empty">+</div>
-              <span className="roster-name">You · TJ · Keith · (1 open)</span>
+              <div className="player-dot filled">{profile?.initials || 'ME'}</div>
+              {foursomePlayers.map(p => (
+                <div key={p.id} className="player-dot filled">{p.initials || '??'}</div>
+              ))}
+              {[...Array(Math.max(0, 3 - foursomePlayers.length))].map((_, i) => (
+                <div key={`empty-chat-${i}`} className="player-dot empty">+</div>
+              ))}
+              <span className="roster-name">
+                You{foursomePlayers.map(p => ` · ${p.username?.split(' ')[0]}`).join('')}
+                {foursomePlayers.length < 3 ? ` · (${3 - foursomePlayers.length} open)` : ''}
+              </span>
             </div>
           </div>
 
@@ -1856,34 +2121,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* TJ score block */}
-            <div className="review-player-block">
-              <div className="review-player-head">
-                <div className="review-player-name">TJ</div>
-                <div className="review-player-total">
-                  {reviewScoresTj.reduce((a, b) => a + b, 0)} <span className="vs">+{reviewScoresTj.reduce((a, b) => a + b, 0) - 71}</span>
-                </div>
-              </div>
-              <div className="review-hole-grid">
-                <div className="gh row-label">HOLE</div>
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => <div key={n} className="gh">{n}</div>)}
-                <div className="gh row-label">PAR</div>
-                {[4, 5, 3, 4, 4, 3, 5, 4, 4].map((p, i) => <div key={i} className="par-cell">{p}</div>)}
-                <div className="gh row-label">SCORE</div>
-                {reviewScoresTj.slice(0, 9).map((s, idx) => (
-                  <input 
-                    key={idx} 
-                    className="score-cell" 
-                    type="number" 
-                    value={s} 
-                    onChange={(e) => setReviewScoresTj(prev => prev.map((sc, i) => i === idx ? Number(e.target.value) : sc))}
-                  />
-                ))}
-              </div>
-              <div className="review-out-in">
-                <span>OUT <b>{reviewScoresTj.slice(0, 9).reduce((a, b) => a + b, 0)}</b></span>
-              </div>
-            </div>
+
           </div>
 
           <div className="review-actionbar">

@@ -3850,3 +3850,392 @@ body {
   text-transform: uppercase;
   text-align: center;
 }
+
+/* ===== PLAYER SEARCH & INVITE SYSTEM ===== */
+
+/* Invite Banner */
+.invite-banner {
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.12) 0%, rgba(184, 154, 92, 0.08) 100%);
+  border: 1px solid rgba(76, 175, 80, 0.3);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin: 0 16px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.invite-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.invite-banner-text { flex: 1; min-width: 0; }
+.invite-banner-name {
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cream);
+}
+.invite-banner-detail {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+.invite-banner-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.invite-accept-btn {
+  background: var(--green);
+  color: #fff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+.invite-decline-btn {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
+  padding: 6px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* Foursome Roster */
+.foursome-roster {
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.roster-slot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  transition: all 0.2s;
+}
+.roster-slot.empty {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  cursor: pointer;
+  opacity: 0.7;
+}
+.roster-slot.empty:hover {
+  opacity: 1;
+  border-color: var(--green);
+  background: rgba(76, 175, 80, 0.05);
+}
+.roster-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--green) 0%, #2d5a3f 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+.roster-avatar.you {
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark, #b8960c) 100%);
+  color: var(--bg-deep);
+}
+.roster-avatar-empty {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 2px dashed var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.roster-info { flex: 1; min-width: 0; }
+.roster-name {
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cream);
+}
+.roster-name.empty-label { color: var(--text-dim); }
+.roster-detail {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+.roster-remove {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-faint);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+.roster-remove:hover {
+  border-color: var(--danger, #e74c3c);
+  color: var(--danger, #e74c3c);
+  background: rgba(231, 76, 60, 0.08);
+}
+
+/* Friends Quick List */
+.friends-quick-list {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px;
+  overflow-x: auto;
+  margin-bottom: 16px;
+  -webkit-overflow-scrolling: touch;
+}
+.friends-quick-list::-webkit-scrollbar { display: none; }
+.friend-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 6px 14px 6px 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.friend-chip:hover {
+  border-color: var(--green);
+  background: rgba(76, 175, 80, 0.06);
+}
+.friend-chip span {
+  font-family: var(--body);
+  font-size: 12px;
+  color: var(--cream);
+  font-weight: 500;
+}
+.friend-chip .player-dot { width: 26px; height: 26px; font-size: 9px; }
+
+/* Player Search Modal */
+.player-search-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+.player-search-modal {
+  background: var(--bg);
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  max-width: 480px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s ease;
+  border: 1px solid var(--border);
+  border-bottom: none;
+}
+.player-search-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.player-search-title {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--cream);
+}
+.player-search-close {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.player-search-input {
+  margin: 14px 20px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  color: var(--cream);
+  font-family: var(--body);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.player-search-input:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.15);
+}
+.player-search-input::placeholder {
+  color: var(--text-faint);
+  font-style: italic;
+}
+.player-search-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 20px 20px;
+}
+.player-search-loading,
+.player-search-empty {
+  text-align: center;
+  padding: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  letter-spacing: 0.1em;
+}
+
+/* Player Profile Card */
+.player-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 10px;
+  transition: all 0.2s;
+}
+.player-card:hover {
+  border-color: var(--border-strong);
+}
+.player-card-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.player-card-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--green) 0%, #2d5a3f 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+.player-card-info { flex: 1; }
+.player-card-name {
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--cream);
+}
+.player-card-hcp {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+.player-card-bio {
+  font-family: var(--body);
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.4;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  background: rgba(184, 154, 92, 0.05);
+  border-radius: 8px;
+  border-left: 3px solid var(--gold-deep);
+}
+.player-card-actions {
+  display: flex;
+  gap: 8px;
+}
+.pc-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+.pc-btn.invite {
+  background: var(--green);
+  color: #fff;
+}
+.pc-btn.invite:hover {
+  background: var(--green-bright, #5cb85c);
+  transform: translateY(-1px);
+}
+.pc-btn.friend {
+  background: transparent;
+  border: 1px solid var(--gold);
+  color: var(--gold);
+}
+.pc-btn.friend:hover {
+  background: rgba(184, 154, 92, 0.1);
+}
+.pc-btn.disabled {
+  background: var(--bg-elevated);
+  color: var(--text-faint);
+  cursor: default;
+  border: 1px solid var(--border);
+}
+
+/* Empty foursome chip */
+.fs-chip.empty-chip {
+  cursor: pointer;
+  opacity: 0.5;
+  border-style: dashed;
+}
+.fs-chip.empty-chip:hover {
+  opacity: 0.8;
+  border-color: var(--green);
+}
