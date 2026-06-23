@@ -133,6 +133,21 @@ export default function App() {
   const [sentInvites, setSentInvites] = useState([]);
   const [showFriendsList, setShowFriendsList] = useState(false);
 
+  // Groups state
+  const [groups, setGroups] = useState([]);
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [groupMembers, setGroupMembers] = useState([]);
+  const [groupMessages, setGroupMessages] = useState([]);
+  const [groupMsgInput, setGroupMsgInput] = useState('');
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupDesc, setNewGroupDesc] = useState('');
+  const [newGroupEmoji, setNewGroupEmoji] = useState('⛳');
+  const [groupInviteSearch, setGroupInviteSearch] = useState('');
+  const [groupInviteResults, setGroupInviteResults] = useState([]);
+  const [pendingGroupInvites, setPendingGroupInvites] = useState([]);
+  const groupChatRef = useRef(null);
+
   // Manual Tracker State
   const [currentHole, setCurrentHole] = useState(1);
   const [selectedCourse, setSelectedCourse] = useState(courses.find(c => c.name.includes("Shoal Creek")) || courses[0]);
@@ -470,6 +485,241 @@ export default function App() {
     if (foursomePlayers.find(p => p.id === player.id)) { alert('Player already in foursome'); return; }
     setFoursomePlayers(prev => [...prev, { ...player, status: 'confirmed' }]);
   };
+
+  // ── Groups System ──
+  const fetchGroups = async () => {
+    if (!session?.user?.id) return;
+    try {
+      // Groups where I'm admin
+      const { data: adminGroups } = await supabase
+        .from('groups')
+        .select('*')
+        .eq('admin_id', session.user.id);
+
+      // Groups where I'm a member
+      const { data: memberRows } = await supabase
+        .from('group_members')
+        .select('group_id, status')
+        .eq('user_id', session.user.id)
+        .in('status', ['active', 'invited']);
+
+      let memberGroups = [];
+      if (memberRows && memberRows.length > 0) {
+        const gIds = memberRows.map(m => m.group_id);
+        const { data } = await supabase.from('groups').select('*').in('id', gIds);
+        memberGroups = (data || []).map(g => ({
+          ...g,
+          myStatus: memberRows.find(m => m.group_id === g.id)?.status
+        }));
+      }
+
+      // Merge and deduplicate
+      const allGroups = [...(adminGroups || []).map(g => ({ ...g, myRole: 'admin', myStatus: 'active' }))];
+      (memberGroups || []).forEach(g => {
+        if (!allGroups.find(ag => ag.id === g.id)) {
+          allGroups.push({ ...g, myRole: 'member' });
+        }
+      });
+
+      setGroups(allGroups);
+
+      // Pending group invites
+      const pending = allGroups.filter(g => g.myStatus === 'invited');
+      setPendingGroupInvites(pending);
+    } catch (e) { console.error('fetchGroups error:', e); }
+  };
+
+  const createGroup = async () => {
+    if (!newGroupName.trim()) { alert('Group name is required'); return; }
+    if (!session?.user?.id) return;
+    try {
+      const { data, error } = await supabase.from('groups').insert([{
+        name: newGroupName.trim(),
+        description: newGroupDesc.trim(),
+        admin_id: session.user.id,
+        avatar_emoji: newGroupEmoji || '⛳',
+        is_private: true
+      }]).select().single();
+
+      if (error) { alert('Error creating group: ' + error.message); return; }
+
+      // Add admin as active member
+      await supabase.from('group_members').insert([{
+        group_id: data.id,
+        user_id: session.user.id,
+        role: 'admin',
+        status: 'active'
+      }]);
+
+      setShowCreateGroup(false);
+      setNewGroupName('');
+      setNewGroupDesc('');
+      setNewGroupEmoji('⛳');
+      fetchGroups();
+    } catch (e) { console.error(e); }
+  };
+
+  const fetchGroupDetail = async (groupId) => {
+    try {
+      // Fetch members with profiles
+      const { data: members } = await supabase
+        .from('group_members')
+        .select('*')
+        .eq('group_id', groupId)
+        .in('status', ['active', 'invited']);
+
+      if (members && members.length > 0) {
+        const userIds = members.map(m => m.user_id);
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, username, initials, handicap, bio')
+          .in('id', userIds);
+        setGroupMembers(members.map(m => ({
+          ...m,
+          profile: (profiles || []).find(p => p.id === m.user_id)
+        })));
+      } else {
+        setGroupMembers([]);
+      }
+
+      // Fetch messages
+      const { data: msgs } = await supabase
+        .from('group_messages')
+        .select('*')
+        .eq('group_id', groupId)
+        .order('created_at', { ascending: true })
+        .limit(100);
+
+      if (msgs && msgs.length > 0) {
+        const userIds = [...new Set(msgs.map(m => m.user_id))];
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, username, initials')
+          .in('id', userIds);
+        setGroupMessages(msgs.map(m => ({
+          ...m,
+          senderProfile: (profiles || []).find(p => p.id === m.user_id)
+        })));
+      } else {
+        setGroupMessages([]);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const openGroup = (group) => {
+    setSelectedGroup(group);
+    setScreen('group-detail');
+    fetchGroupDetail(group.id);
+  };
+
+  const inviteToGroup = async (userId) => {
+    if (!selectedGroup) return;
+    try {
+      const { error } = await supabase.from('group_members').insert([{
+        group_id: selectedGroup.id,
+        user_id: userId,
+        role: 'member',
+        status: 'invited'
+      }]);
+      if (error) {
+        if (error.message.includes('duplicate')) alert('Already invited!');
+        else alert('Error: ' + error.message);
+      } else {
+        alert('Invite sent!');
+        fetchGroupDetail(selectedGroup.id);
+        setGroupInviteSearch('');
+        setGroupInviteResults([]);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const acceptGroupInvite = async (groupId) => {
+    if (!session?.user?.id) return;
+    try {
+      const { error } = await supabase
+        .from('group_members')
+        .update({ status: 'active' })
+        .eq('group_id', groupId)
+        .eq('user_id', session.user.id);
+      if (!error) fetchGroups();
+    } catch (e) { console.error(e); }
+  };
+
+  const removeFromGroup = async (membershipId) => {
+    try {
+      await supabase.from('group_members').delete().eq('id', membershipId);
+      if (selectedGroup) fetchGroupDetail(selectedGroup.id);
+    } catch (e) { console.error(e); }
+  };
+
+  const leaveGroup = async (groupId) => {
+    if (!session?.user?.id) return;
+    if (!confirm('Leave this group?')) return;
+    try {
+      await supabase.from('group_members')
+        .delete()
+        .eq('group_id', groupId)
+        .eq('user_id', session.user.id);
+      setScreen('groups');
+      setSelectedGroup(null);
+      fetchGroups();
+    } catch (e) { console.error(e); }
+  };
+
+  const deleteGroup = async (groupId) => {
+    if (!confirm('Delete this group? This cannot be undone.')) return;
+    try {
+      await supabase.from('groups').delete().eq('id', groupId);
+      setScreen('groups');
+      setSelectedGroup(null);
+      fetchGroups();
+    } catch (e) { console.error(e); }
+  };
+
+  const sendGroupMessage = async () => {
+    if (!groupMsgInput.trim() || !selectedGroup || !session?.user?.id) return;
+    try {
+      const { error } = await supabase.from('group_messages').insert([{
+        group_id: selectedGroup.id,
+        user_id: session.user.id,
+        text: groupMsgInput.trim()
+      }]);
+      if (!error) {
+        setGroupMsgInput('');
+        fetchGroupDetail(selectedGroup.id);
+        setTimeout(() => {
+          if (groupChatRef.current) groupChatRef.current.scrollTop = groupChatRef.current.scrollHeight;
+        }, 100);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  // Search players to invite to group
+  const searchGroupInvitePlayers = async (query) => {
+    if (!query || query.length < 2) { setGroupInviteResults([]); return; }
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, username, initials, handicap')
+        .ilike('username', `%${query}%`)
+        .neq('id', session?.user?.id || '')
+        .limit(8);
+      // Filter out existing members
+      const memberIds = groupMembers.map(m => m.user_id);
+      setGroupInviteResults((data || []).filter(p => !memberIds.includes(p.id)));
+    } catch (e) { console.error(e); }
+  };
+
+  useEffect(() => {
+    if (!groupInviteSearch) return;
+    const t = setTimeout(() => searchGroupInvitePlayers(groupInviteSearch), 300);
+    return () => clearTimeout(t);
+  }, [groupInviteSearch]);
+
+  // Fetch groups when session loads
+  useEffect(() => {
+    if (session?.user?.id) fetchGroups();
+  }, [session?.user?.id]);
 
   const handleAuth = async () => {
     setAuthError('');
@@ -2130,16 +2380,221 @@ export default function App() {
           </div>
         </div>
 
+        {/* ============== GROUPS LIST SCREEN ============== */}
+        <div className={`screen ${screen === 'groups' ? '' : 'hidden'}`} id="groups-screen">
+          <div className="groups-topbar">
+            <span className="groups-title">Groups</span>
+            <button className="groups-create-btn" onClick={() => setShowCreateGroup(true)}>+ NEW</button>
+          </div>
+
+          {/* Pending Group Invites */}
+          {pendingGroupInvites.length > 0 && (
+            <div className="section-head" style={{marginTop: 8}}>
+              <span className="section-title">▸ Group Invites</span>
+              <span className="section-link">{pendingGroupInvites.length} NEW</span>
+            </div>
+          )}
+          {pendingGroupInvites.map(g => (
+            <div key={g.id} className="invite-banner">
+              <div className="invite-banner-content">
+                <div className="group-emoji-avatar">{g.avatar_emoji || '⛳'}</div>
+                <div className="invite-banner-text">
+                  <div className="invite-banner-name">{g.name}</div>
+                  <div className="invite-banner-detail">{g.description || 'Private group'}</div>
+                </div>
+              </div>
+              <div className="invite-banner-actions">
+                <button className="invite-accept-btn" onClick={() => acceptGroupInvite(g.id)}>✓ JOIN</button>
+              </div>
+            </div>
+          ))}
+
+          {/* My Groups */}
+          {groups.filter(g => g.myStatus === 'active').length > 0 ? (
+            <div className="groups-list">
+              {groups.filter(g => g.myStatus === 'active').map(g => (
+                <div key={g.id} className="group-card" onClick={() => openGroup(g)}>
+                  <div className="group-card-emoji">{g.avatar_emoji || '⛳'}</div>
+                  <div className="group-card-info">
+                    <div className="group-card-name">{g.name}</div>
+                    <div className="group-card-meta">
+                      {g.myRole === 'admin' && <span className="admin-badge-sm">ADMIN</span>}
+                      {g.description || 'Private group'}
+                    </div>
+                  </div>
+                  <div className="group-card-arrow">›</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="groups-empty">
+              <div className="groups-empty-emoji">👥</div>
+              <div className="groups-empty-title">No Groups Yet</div>
+              <div className="groups-empty-text">Create a group to organize your golf crew</div>
+              <button className="groups-empty-btn" onClick={() => setShowCreateGroup(true)}>+ CREATE GROUP</button>
+            </div>
+          )}
+
+          {/* Create Group Modal */}
+          {showCreateGroup && (
+            <div className="player-search-overlay">
+              <div className="player-search-modal">
+                <div className="player-search-header">
+                  <span className="player-search-title">Create Group</span>
+                  <button className="player-search-close" onClick={() => setShowCreateGroup(false)}>✕</button>
+                </div>
+                <div className="create-group-form">
+                  <div className="cg-emoji-picker">
+                    {['⛳', '🏌️', '🏆', '🍺', '🔥', '💪', '🎯', '⭐', '🦅', '🐯', '🌅', '👑'].map(e => (
+                      <button key={e} className={`cg-emoji-btn ${newGroupEmoji === e ? 'active' : ''}`} onClick={() => setNewGroupEmoji(e)}>{e}</button>
+                    ))}
+                  </div>
+                  <input
+                    type="text"
+                    className="player-search-input"
+                    placeholder="Group name…"
+                    value={newGroupName}
+                    onChange={e => setNewGroupName(e.target.value)}
+                    maxLength={40}
+                  />
+                  <input
+                    type="text"
+                    className="player-search-input"
+                    placeholder="Description (optional)…"
+                    value={newGroupDesc}
+                    onChange={e => setNewGroupDesc(e.target.value)}
+                    maxLength={100}
+                  />
+                  <button className="cg-create-btn" onClick={createGroup}>CREATE GROUP</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ============== GROUP DETAIL SCREEN ============== */}
+        <div className={`screen ${screen === 'group-detail' ? '' : 'hidden'}`} id="group-detail-screen" style={{ display: 'flex', flexDirection: 'column', height: '100%', paddingBottom: 0 }}>
+          {selectedGroup && (
+            <>
+              <div style={{ padding: '14px 16px 0' }}>
+                <button className="back-btn" onClick={() => { setScreen('groups'); setSelectedGroup(null); }}>← GROUPS</button>
+              </div>
+
+              {/* Group Header */}
+              <div className="gd-header">
+                <div className="gd-emoji">{selectedGroup.avatar_emoji || '⛳'}</div>
+                <div className="gd-title">{selectedGroup.name}</div>
+                {selectedGroup.description && <div className="gd-desc">{selectedGroup.description}</div>}
+                <div className="gd-meta">
+                  {groupMembers.filter(m => m.status === 'active').length} members
+                  {selectedGroup.myRole === 'admin' && <span className="admin-badge">ADMIN</span>}
+                </div>
+              </div>
+
+              {/* Members */}
+              <div className="gd-members-section">
+                <div className="gd-section-head">
+                  <span>MEMBERS</span>
+                  {selectedGroup.myRole === 'admin' && (
+                    <button className="gd-invite-btn" onClick={() => setGroupInviteSearch(' ')}>+ INVITE</button>
+                  )}
+                </div>
+                <div className="gd-members-list">
+                  {groupMembers.map(m => (
+                    <div key={m.id} className="gd-member">
+                      <div className="player-dot filled">{m.profile?.initials || '??'}</div>
+                      <div className="gd-member-info">
+                        <div className="gd-member-name">
+                          {m.profile?.username || 'Unknown'}
+                          {m.role === 'admin' && <span className="admin-badge-sm">ADMIN</span>}
+                          {m.status === 'invited' && <span className="invited-badge-sm">INVITED</span>}
+                        </div>
+                        <div className="gd-member-hcp">HCP {m.profile?.handicap || '–'}</div>
+                      </div>
+                      {selectedGroup.myRole === 'admin' && m.user_id !== session?.user?.id && (
+                        <button className="roster-remove" onClick={() => removeFromGroup(m.id)}>✕</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Invite Search (inline) */}
+                {groupInviteSearch && (
+                  <div className="gd-invite-area">
+                    <input
+                      type="text"
+                      className="player-search-input"
+                      placeholder="Search by username…"
+                      value={groupInviteSearch === ' ' ? '' : groupInviteSearch}
+                      onChange={e => setGroupInviteSearch(e.target.value)}
+                      autoFocus
+                    />
+                    <button className="player-search-close" style={{position:'absolute',right:26,top:8}} onClick={() => { setGroupInviteSearch(''); setGroupInviteResults([]); }}>✕</button>
+                    {groupInviteResults.map(p => (
+                      <div key={p.id} className="gd-invite-result" onClick={() => inviteToGroup(p.id)}>
+                        <div className="player-dot filled">{p.initials}</div>
+                        <span>{p.username}</span>
+                        <span className="gd-invite-add">+ INVITE</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Group Actions */}
+              <div className="gd-actions">
+                {selectedGroup.myRole === 'admin' ? (
+                  <button className="gd-danger-btn" onClick={() => deleteGroup(selectedGroup.id)}>🗑 DELETE GROUP</button>
+                ) : (
+                  <button className="gd-danger-btn" onClick={() => leaveGroup(selectedGroup.id)}>🚪 LEAVE GROUP</button>
+                )}
+              </div>
+
+              {/* Group Chat */}
+              <div className="gd-chat-label">GROUP CHAT</div>
+              <div className="gd-chat-thread" ref={groupChatRef} style={{ flex: 1, overflowY: 'auto', paddingBottom: '100px' }}>
+                {groupMessages.length === 0 && (
+                  <div className="gd-chat-empty">No messages yet — say something!</div>
+                )}
+                {groupMessages.map((msg, i) => {
+                  const isMe = msg.user_id === session?.user?.id;
+                  return (
+                    <div key={msg.id || i} className={`msg ${isMe ? 'me' : 'them'}`}>
+                      <div className="msg-stack">
+                        <div className="sender">{isMe ? 'YOU' : (msg.senderProfile?.username || '??')}</div>
+                        <div className="bubble">{msg.text}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Chat Input */}
+              <div className="banter-input-area">
+                <input
+                  type="text"
+                  className="banter-input"
+                  placeholder="Message the group…"
+                  value={groupMsgInput}
+                  onChange={e => setGroupMsgInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') sendGroupMessage(); }}
+                />
+                <button className="banter-send" onClick={sendGroupMessage}>SEND</button>
+              </div>
+            </>
+          )}
+        </div>
+
         {/* ============== PERSISTENT BOTTOM NAVIGATION BAR ============== */}
-        {!['chat', 'paywall', 'tracker', 'camera', 'review'].includes(screen) && (
+        {!['chat', 'paywall', 'tracker', 'camera', 'review', 'group-detail'].includes(screen) && (
           <div className="bottom-nav">
             <button className={`nav-btn ${screen === 'home' ? 'active' : ''}`} onClick={() => setScreen('home')}>
               <span className="icon">⛳</span>
               <span>TEES</span>
             </button>
-            <button className={`nav-btn ${screen === 'chat' ? 'active' : ''}`} onClick={() => setScreen('chat')}>
-              <span className="icon">💬</span>
-              <span>BANTER</span>
+            <button className={`nav-btn ${screen === 'groups' ? 'active' : ''}`} onClick={() => setScreen('groups')}>
+              <span className="icon">👥</span>
+              <span>GROUPS</span>
             </button>
             <button className={`nav-btn snap ${screen === 'snap-intro' || screen === 'camera' || screen === 'review' ? 'active' : ''}`} onClick={() => setScreen('snap-intro')}>
               <span className="icon">📸</span>
