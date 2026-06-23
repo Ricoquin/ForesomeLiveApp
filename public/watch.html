@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>ForeSome GPS</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d1a12;
+    color: #f4ecd8;
+    font-family: -apple-system, 'SF Pro', 'Helvetica Neue', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 8px;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 200px;
+    gap: 2px;
+  }
+
+  /* GPS status dot */
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #555;
+    margin-bottom: 2px;
+  }
+  .dot.good { background: #4caf50; box-shadow: 0 0 6px rgba(76,175,80,0.7); animation: pulse 2s infinite; }
+  .dot.fair { background: #ff9800; box-shadow: 0 0 6px rgba(255,152,0,0.5); animation: pulse 2s infinite; }
+  .dot.poor { background: #e74c3c; }
+  .dot.loading { background: #b89a5c; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.7)} }
+
+  .label {
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    color: #4caf50;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+
+  /* Big distance */
+  .dist {
+    font-size: 56px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: #f4ecd8;
+  }
+  .unit {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.3em;
+    color: rgba(244,236,216,0.5);
+    margin-top: 1px;
+  }
+
+  /* Front / Center / Back */
+  .fbc {
+    display: flex;
+    gap: 6px;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: rgba(244,236,216,0.35);
+    margin-top: 6px;
+  }
+  .fbc .c { color: #4caf50; }
+  .fbc .sep { color: rgba(244,236,216,0.15); }
+
+  /* Hole info */
+  .hole {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: rgba(244,236,216,0.5);
+    margin-top: 8px;
+    text-transform: uppercase;
+  }
+  .course {
+    font-size: 7px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    color: rgba(244,236,216,0.25);
+    margin-top: 2px;
+    text-transform: uppercase;
+    text-align: center;
+    max-width: 160px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* Hole nav buttons */
+  .nav {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+  }
+  .nav button {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    border: 1px solid rgba(76,175,80,0.3);
+    background: rgba(76,175,80,0.08);
+    color: #4caf50;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .nav button:active { background: rgba(76,175,80,0.2); }
+
+  /* Status text */
+  .status {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: rgba(244,236,216,0.4);
+    text-align: center;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap" id="app">
+  <div class="dot loading" id="gpsDot"></div>
+  <div class="label" id="gpsLabel">ACQUIRING GPS…</div>
+  <div class="dist" id="distNum">---</div>
+  <div class="unit">YARDS</div>
+  <div class="fbc" id="fbcRow" style="display:none">
+    <span id="distF">F --</span>
+    <span class="sep">·</span>
+    <span class="c" id="distC">C --</span>
+    <span class="sep">·</span>
+    <span id="distB">B --</span>
+  </div>
+  <div class="hole" id="holeLabel">HOLE 1 · PAR 4</div>
+  <div class="course" id="courseLabel">DETECTING COURSE…</div>
+  <div class="nav">
+    <button id="prevBtn" onclick="changeHole(-1)">‹</button>
+    <button id="nextBtn" onclick="changeHole(1)">›</button>
+  </div>
+</div>
+
+<script>
+// ── Green coordinates for KC metro courses ──
+const COURSES = {
+  'Shoal Creek': {
+    pars: [4,4,3,4,3,4,5,4,5,4,3,4,5,4,4,4,3,4],
+    greens: [
+      [39.25805,-94.48915],[39.25615,-94.48700],[39.25505,-94.48825],[39.25350,-94.48610],
+      [39.25500,-94.48440],[39.25680,-94.48345],[39.25410,-94.48100],[39.25220,-94.48330],
+      [39.25060,-94.48620],[39.25190,-94.48880],[39.25345,-94.49050],[39.25510,-94.49170],
+      [39.25730,-94.49310],[39.25900,-94.49140],[39.25780,-94.48920],[39.25940,-94.48750],
+      [39.25870,-94.48560],[39.25700,-94.48680]
+    ],
+    center: [39.255, -94.487]
+  },
+  'Swope Memorial': {
+    pars: [4,4,4,4,5,3,4,3,5,4,4,5,3,4,4,3,5,4],
+    greens: [
+      [39.00310,-94.51530],[39.00185,-94.51350],[39.00060,-94.51530],[38.99905,-94.51340],
+      [38.99720,-94.51580],[38.99850,-94.51750],[39.00020,-94.51900],[39.00180,-94.51760],
+      [39.00380,-94.51950],[39.00250,-94.52150],[39.00080,-94.52010],[38.99870,-94.52200],
+      [38.99710,-94.52020],[38.99560,-94.51830],[38.99720,-94.51650],[38.99890,-94.51480],
+      [39.00100,-94.51680],[39.00290,-94.51510]
+    ],
+    center: [39.001, -94.517]
+  },
+  'Heart of America': {
+    pars: [4,4,3,4,4,4,5,3,4,4,4,3,4,4,4,5,3,4],
+    greens: [
+      [38.98120,-94.48950],[38.97980,-94.48770],[38.98090,-94.48600],[38.97930,-94.48420],
+      [38.98050,-94.48250],[38.98190,-94.48400],[38.97850,-94.48150],[38.97990,-94.48330],
+      [38.98150,-94.48550],[38.98120,-94.48950],[38.97980,-94.48770],[38.98090,-94.48600],
+      [38.97930,-94.48420],[38.98050,-94.48250],[38.98190,-94.48400],[38.97850,-94.48150],
+      [38.97990,-94.48330],[38.98150,-94.48550]
+    ],
+    center: [38.981, -94.486]
+  },
+  'Tiffany Greens': {
+    pars: [5,4,4,3,4,3,4,4,5,3,5,4,4,4,3,5,4,4],
+    greens: [
+      [39.24650,-94.52950],[39.24480,-94.52760],[39.24310,-94.52950],[39.24450,-94.53130],
+      [39.24280,-94.53310],[39.24130,-94.53140],[39.23960,-94.52960],[39.23810,-94.53150],
+      [39.23630,-94.52920],[39.23790,-94.52730],[39.23950,-94.52540],[39.24120,-94.52360],
+      [39.24290,-94.52540],[39.24460,-94.52370],[39.24600,-94.52560],[39.24430,-94.52180],
+      [39.24580,-94.52350],[39.24750,-94.52540]
+    ],
+    center: [39.242, -94.527]
+  },
+  'Hodge Park': {
+    pars: [4,4,3,4,4,4,3,4,4,4,5,3,4,4,4,3,5,4],
+    greens: [
+      [39.22680,-94.47810],[39.22510,-94.47620],[39.22640,-94.47440],[39.22420,-94.47250],
+      [39.22250,-94.47460],[39.22400,-94.47650],[39.22560,-94.47850],[39.22380,-94.48020],
+      [39.22210,-94.47830],[39.22050,-94.47640],[39.21880,-94.47850],[39.22030,-94.48040],
+      [39.22200,-94.48230],[39.22370,-94.48400],[39.22540,-94.48210],[39.22700,-94.48040],
+      [39.22530,-94.47850],[39.22690,-94.47640]
+    ],
+    center: [39.224, -94.479]
+  }
+};
+
+// ── State ──
+let currentHole = 1;
+let activeCourse = null;
+let userLat = null, userLng = null;
+
+// ── Haversine ──
+function distYards(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const r = d => d * Math.PI / 180;
+  const dLat = r(lat2 - lat1), dLon = r(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(r(lat1)) * Math.cos(r(lat2)) * Math.sin(dLon/2)**2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) * 1.09361);
+}
+
+// ── Detect nearest course ──
+function detectCourse(lat, lng) {
+  let best = null, bestDist = Infinity;
+  for (const [name, c] of Object.entries(COURSES)) {
+    const d = distYards(lat, lng, c.center[0], c.center[1]);
+    if (d < bestDist) { bestDist = d; best = name; }
+  }
+  // Only match if within ~2 miles (3520 yards)
+  return bestDist < 3520 ? best : null;
+}
+
+// ── Update display ──
+function updateDisplay() {
+  const dot = document.getElementById('gpsDot');
+  const label = document.getElementById('gpsLabel');
+  const num = document.getElementById('distNum');
+  const fbc = document.getElementById('fbcRow');
+  const holeEl = document.getElementById('holeLabel');
+  const courseEl = document.getElementById('courseLabel');
+
+  if (!activeCourse) {
+    label.textContent = userLat ? 'NO COURSE NEARBY' : 'ACQUIRING GPS…';
+    dot.className = userLat ? 'dot poor' : 'dot loading';
+    num.textContent = '---';
+    fbc.style.display = 'none';
+    holeEl.textContent = 'HOLE ' + currentHole;
+    courseEl.textContent = userLat ? 'MOVE TO A KC COURSE' : 'DETECTING COURSE…';
+    return;
+  }
+
+  const course = COURSES[activeCourse];
+  const green = course.greens[currentHole - 1];
+  const par = course.pars[currentHole - 1];
+
+  holeEl.textContent = 'HOLE ' + currentHole + ' · PAR ' + par;
+  courseEl.textContent = activeCourse.toUpperCase();
+
+  if (userLat && green) {
+    const d = distYards(userLat, userLng, green[0], green[1]);
+    num.textContent = d;
+    label.textContent = 'GPS TO PIN';
+    dot.className = 'dot good';
+    fbc.style.display = 'flex';
+    document.getElementById('distF').textContent = 'F ' + Math.max(0, d - 6);
+    document.getElementById('distC').textContent = 'C ' + d;
+    document.getElementById('distB').textContent = 'B ' + (d + 6);
+  } else {
+    num.textContent = '---';
+    label.textContent = 'ACQUIRING GPS…';
+    dot.className = 'dot loading';
+    fbc.style.display = 'none';
+  }
+}
+
+// ── Hole navigation ──
+function changeHole(delta) {
+  currentHole = Math.max(1, Math.min(18, currentHole + delta));
+  updateDisplay();
+}
+
+// ── Start GPS ──
+if (navigator.geolocation) {
+  navigator.geolocation.watchPosition(
+    pos => {
+      userLat = pos.coords.latitude;
+      userLng = pos.coords.longitude;
+      if (!activeCourse) {
+        activeCourse = detectCourse(userLat, userLng);
+      }
+      updateDisplay();
+    },
+    err => {
+      document.getElementById('gpsLabel').textContent = err.code === 1 ? 'PERMISSION DENIED' : 'GPS ERROR';
+      document.getElementById('gpsDot').className = 'dot poor';
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+  );
+} else {
+  document.getElementById('gpsLabel').textContent = 'GPS NOT SUPPORTED';
+  document.getElementById('gpsDot').className = 'dot poor';
+}
+</script>
+</body>
+</html>
