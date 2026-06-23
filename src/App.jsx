@@ -284,6 +284,10 @@ export default function App() {
   const [selectedTeeTime, setSelectedTeeTime] = useState(null);
   const [bookingPlayers, setBookingPlayers] = useState(1);
   const [teeTimeSearchState, setTeeTimeSearchState] = useState('');
+  const [zipSearch, setZipSearch] = useState('');
+  const [zipLat, setZipLat] = useState(null);
+  const [zipLng, setZipLng] = useState(null);
+  const [searchRadius, setSearchRadius] = useState(50); // miles
 
   // Manual Tracker State
   const [currentHole, setCurrentHole] = useState(1);
@@ -686,21 +690,47 @@ export default function App() {
 
       let query = supabase.from('tee_times').select('*, partner_courses(*)').eq('is_active', true).gt('spots_remaining', 0).gte('date', startDate).lte('date', endDate).order('date').order('time');
 
-      if (teeTimeSearchState) {
-        // Filter will be done client-side after fetch since we need to join
-      }
-
       const { data, error } = await query;
       if (!error) {
         let filtered = data || [];
+        // Filter by state
         if (teeTimeSearchState) {
           const st = teeTimeSearchState.toUpperCase();
           filtered = filtered.filter(t => t.partner_courses?.state?.toUpperCase() === st);
+        }
+        // Filter by zip code radius
+        if (zipLat && zipLng) {
+          filtered = filtered.filter(t => {
+            const c = t.partner_courses;
+            if (!c?.lat || !c?.lng) return false;
+            const dist = haversineYards(zipLat, zipLng, c.lat, c.lng) / 1760; // yards to miles
+            t._distanceMi = Math.round(dist * 10) / 10; // attach for display
+            return dist <= searchRadius;
+          });
+          // Sort by distance
+          filtered.sort((a, b) => (a._distanceMi || 0) - (b._distanceMi || 0));
         }
         setAvailableTeeTimes(filtered);
       }
     } catch (e) { console.error('fetchTeeTimes error:', e); }
   };
+
+  // Geocode zip code to lat/lng using free API
+  const geocodeZip = async (zip) => {
+    if (!zip || zip.length < 5) { setZipLat(null); setZipLng(null); return; }
+    try {
+      const res = await fetch(`https://api.zippopotam.us/us/${zip}`);
+      if (res.ok) {
+        const data = await res.json();
+        const place = data.places?.[0];
+        if (place) {
+          setZipLat(parseFloat(place.latitude));
+          setZipLng(parseFloat(place.longitude));
+        }
+      } else { setZipLat(null); setZipLng(null); }
+    } catch { setZipLat(null); setZipLng(null); }
+  };
+
 
   const fetchMyBookings = async () => {
     if (!session?.user?.id) return;
@@ -942,7 +972,7 @@ export default function App() {
   }, [session?.user?.id]);
 
   // Fetch tee times and bookings
-  useEffect(() => { fetchTeeTimes(); }, [teeTimeFilter, teeTimeSearchState]);
+  useEffect(() => { fetchTeeTimes(); }, [teeTimeFilter, teeTimeSearchState, zipLat, zipLng, searchRadius]);
   useEffect(() => { if (session?.user?.id) fetchMyBookings(); }, [session?.user?.id]);
 
   // ── GPS Tracking (only on tracker screen) ──
@@ -1677,13 +1707,30 @@ export default function App() {
                 {f.toUpperCase()}
               </button>
             ))}
+          </div>
+          <div className="tt-filter-row">
             <input
-              className="tt-state-search"
-              placeholder="State (MO, KS…)"
-              value={teeTimeSearchState}
-              onChange={(e) => setTeeTimeSearchState(e.target.value.slice(0,2))}
-              maxLength={2}
+              className="tt-zip-search"
+              placeholder="ZIP code"
+              value={zipSearch}
+              onChange={(e) => {
+                const v = e.target.value.replace(/\D/g,'').slice(0,5);
+                setZipSearch(v);
+                if (v.length === 5) geocodeZip(v);
+                else { setZipLat(null); setZipLng(null); }
+              }}
+              maxLength={5}
+              inputMode="numeric"
             />
+            <select className="tt-radius-select" value={searchRadius} onChange={(e) => setSearchRadius(parseInt(e.target.value))}>
+              <option value={25}>25 mi</option>
+              <option value={50}>50 mi</option>
+              <option value={100}>100 mi</option>
+            </select>
+            {zipLat && <span className="tt-zip-active">📍 Active</span>}
+            {zipSearch && (
+              <button className="tt-zip-clear" onClick={() => { setZipSearch(''); setZipLat(null); setZipLng(null); }}>✕</button>
+            )}
           </div>
 
           {/* Course Search (for tracker) */}
@@ -1738,7 +1785,7 @@ export default function App() {
                   </div>
                   <div className="tt-card-right">
                     <div className="tt-card-price">${tt.price}</div>
-                    <div className="tt-card-spots">{tt.spots_remaining} spot{tt.spots_remaining !== 1 ? 's' : ''}</div>
+                    <div className="tt-card-spots">{tt.spots_remaining} spot{tt.spots_remaining !== 1 ? 's' : ''}{tt._distanceMi ? ` · ${tt._distanceMi} mi` : ''}</div>
                   </div>
                 </div>
               ))}

@@ -4917,6 +4917,58 @@ body {
 }
 .tt-state-search:focus { border-color: var(--green); }
 
+/* Zip Code Search */
+.tt-zip-search {
+  flex: 1;
+  padding: 8px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--cream);
+  outline: none;
+}
+.tt-zip-search:focus { border-color: var(--green); }
+.tt-radius-select {
+  padding: 8px 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--cream);
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+}
+.tt-zip-active {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--green);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.tt-zip-clear {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 /* Tee Time Cards */
 .tt-list { padding: 0 16px; }
 .tt-card {
