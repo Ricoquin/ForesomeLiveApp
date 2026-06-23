@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ForeSome — Course Partner Portal</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d1a12; --bg-card: #15231a; --bg-deep: #0a130e;
+    --cream: #f4ecd8; --green: #4caf50; --gold: #b89a5c;
+    --border: rgba(244,236,216,0.08); --dim: rgba(244,236,216,0.45);
+    --faint: rgba(244,236,216,0.25);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--cream); font-family:'Inter',sans-serif; min-height:100vh; }
+  .mono { font-family:'JetBrains Mono',monospace; }
+
+  /* Layout */
+  .app { max-width:600px; margin:0 auto; padding:16px; }
+  .header { display:flex; align-items:center; justify-content:space-between; padding:16px 0; border-bottom:1px solid var(--border); margin-bottom:20px; }
+  .header h1 { font-size:22px; font-weight:800; }
+  .header span { font-size:9px; font-weight:700; letter-spacing:.15em; color:var(--green); text-transform:uppercase; font-family:'JetBrains Mono',monospace; }
+  .signout { background:none; border:1px solid var(--border); color:var(--dim); padding:6px 12px; border-radius:16px; font-size:10px; cursor:pointer; font-family:'JetBrains Mono',monospace; font-weight:700; letter-spacing:.1em; }
+
+  /* Auth */
+  .auth-box { max-width:360px; margin:60px auto; text-align:center; }
+  .auth-box h2 { font-size:24px; margin-bottom:8px; }
+  .auth-box p { font-size:13px; color:var(--dim); margin-bottom:24px; }
+  .auth-input { width:100%; padding:12px 16px; background:var(--bg-card); border:1px solid var(--border); border-radius:12px; color:var(--cream); font-size:14px; font-family:inherit; margin-bottom:10px; outline:none; }
+  .auth-input:focus { border-color:var(--green); }
+  .auth-btn { width:100%; padding:14px; background:var(--green); color:#fff; border:none; border-radius:12px; font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; letter-spacing:.15em; cursor:pointer; margin-top:6px; }
+  .auth-toggle { margin-top:16px; font-size:12px; color:var(--dim); }
+  .auth-toggle a { color:var(--green); cursor:pointer; text-decoration:underline; }
+  .auth-error { color:#e74c3c; font-size:12px; margin-top:8px; }
+
+  /* Cards */
+  .card { background:var(--bg-card); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:12px; }
+  .card-title { font-size:16px; font-weight:700; margin-bottom:4px; }
+  .card-meta { font-size:10px; color:var(--dim); font-family:'JetBrains Mono',monospace; letter-spacing:.08em; text-transform:uppercase; }
+
+  /* Form */
+  .form-group { margin-bottom:12px; }
+  .form-label { font-size:10px; font-weight:700; letter-spacing:.12em; color:var(--dim); text-transform:uppercase; font-family:'JetBrains Mono',monospace; margin-bottom:4px; display:block; }
+  .form-input, .form-select { width:100%; padding:10px 14px; background:var(--bg-deep); border:1px solid var(--border); border-radius:10px; color:var(--cream); font-size:14px; font-family:inherit; outline:none; }
+  .form-input:focus, .form-select:focus { border-color:var(--green); }
+  .form-row { display:flex; gap:10px; }
+  .form-row > * { flex:1; }
+
+  /* Buttons */
+  .btn-primary { padding:12px 20px; background:var(--green); color:#fff; border:none; border-radius:12px; font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; letter-spacing:.12em; cursor:pointer; width:100%; }
+  .btn-secondary { padding:10px 16px; background:transparent; border:1px solid var(--border); color:var(--cream); border-radius:10px; font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; letter-spacing:.1em; cursor:pointer; }
+  .btn-danger { padding:8px 14px; background:transparent; border:1px solid rgba(231,76,60,.3); color:rgba(231,76,60,.7); border-radius:10px; font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:700; letter-spacing:.1em; cursor:pointer; }
+
+  /* Section */
+  .section-title { font-size:10px; font-weight:700; letter-spacing:.15em; color:var(--faint); font-family:'JetBrains Mono',monospace; text-transform:uppercase; margin:20px 0 10px; }
+
+  /* Tee time row */
+  .tt-row { display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:10px; border:1px solid var(--border); margin-bottom:6px; }
+  .tt-time { font-size:15px; font-weight:700; min-width:60px; }
+  .tt-info { flex:1; }
+  .tt-info span { font-size:11px; color:var(--dim); }
+  .tt-spots { font-size:11px; color:var(--green); font-weight:700; font-family:'JetBrains Mono',monospace; }
+  .tt-booked { font-size:10px; color:var(--gold); font-weight:700; font-family:'JetBrains Mono',monospace; }
+
+  /* Tabs */
+  .tabs { display:flex; gap:4px; margin-bottom:16px; }
+  .tab { flex:1; padding:10px; text-align:center; font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; letter-spacing:.1em; border:1px solid var(--border); border-radius:10px; cursor:pointer; color:var(--dim); background:transparent; }
+  .tab.active { background:rgba(76,175,80,.1); border-color:var(--green); color:var(--green); }
+
+  .empty { text-align:center; padding:32px; color:var(--faint); font-size:13px; }
+  .badge { display:inline-block; padding:2px 6px; border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:8px; font-weight:700; letter-spacing:.1em; }
+  .badge-green { background:rgba(76,175,80,.15); color:var(--green); }
+  .badge-gold { background:rgba(184,154,92,.15); color:var(--gold); }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+// ── Initialize Supabase (same project as main app) ──
+const SUPABASE_URL = 'https://dbarpqtzhheftinjugpa.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRiYXJwcXR6aGhlZnRpbmp1Z3BhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg4NjE5NTEsImV4cCI6MjA2NDQzNzk1MX0.dIe9KPfHhst7MHG38RCJoZRJmmwa1gO-lxHPjL6VRRE';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const app = document.getElementById('app');
+
+let session = null;
+let myCourse = null;
+let myTeeTimes = [];
+let myBookings = [];
+let tab = 'times';
+
+// ── Auth Check ──
+supabase.auth.getSession().then(({ data }) => {
+  session = data.session;
+  render();
+});
+supabase.auth.onAuthStateChange((_, s) => { session = s; if(s) loadData(); render(); });
+
+// ── Data Loading ──
+async function loadData() {
+  if (!session) return;
+  // Load my course
+  const { data: courses } = await supabase.from('partner_courses').select('*').eq('owner_id', session.user.id);
+  myCourse = courses?.[0] || null;
+
+  if (myCourse) {
+    // Load tee times
+    const { data: times } = await supabase.from('tee_times').select('*').eq('course_id', myCourse.id).gte('date', new Date().toISOString().split('T')[0]).order('date').order('time');
+    myTeeTimes = times || [];
+
+    // Load bookings for my tee times
+    const ttIds = myTeeTimes.map(t => t.id);
+    if (ttIds.length > 0) {
+      const { data: bk } = await supabase.from('bookings').select('*').in('tee_time_id', ttIds).eq('status', 'confirmed');
+      myBookings = bk || [];
+    }
+  }
+  render();
+}
+
+// ── Auth ──
+let authMode = 'login', authEmail = '', authPass = '', authError = '';
+async function doAuth() {
+  authError = '';
+  const fn = authMode === 'login' ? supabase.auth.signInWithPassword : supabase.auth.signUp;
+  const { error } = await fn.call(supabase.auth, { email: authEmail, password: authPass });
+  if (error) authError = error.message;
+  render();
+}
+
+// ── Course Management ──
+async function createCourse(e) {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const { error } = await supabase.from('partner_courses').insert([{
+    owner_id: session.user.id,
+    name: fd.get('name'),
+    city: fd.get('city'),
+    state: fd.get('state'),
+    zip: fd.get('zip'),
+    phone: fd.get('phone'),
+    description: fd.get('description'),
+    website: fd.get('website'),
+    par: parseInt(fd.get('par')) || 72,
+    holes_count: parseInt(fd.get('holes_count')) || 18,
+    lat: parseFloat(fd.get('lat')) || 0,
+    lng: parseFloat(fd.get('lng')) || 0,
+  }]);
+  if (error) alert('Error: ' + error.message);
+  else loadData();
+}
+
+// ── Tee Time Management ──
+async function addTeeTime(e) {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const spots = parseInt(fd.get('spots')) || 4;
+  const { error } = await supabase.from('tee_times').insert([{
+    course_id: myCourse.id,
+    date: fd.get('date'),
+    time: fd.get('time'),
+    price: parseFloat(fd.get('price')) || 0,
+    spots_total: spots,
+    spots_remaining: spots,
+    holes: parseInt(fd.get('holes')) || 18,
+    notes: fd.get('notes'),
+  }]);
+  if (error) alert('Error: ' + error.message);
+  else { e.target.reset(); loadData(); }
+}
+
+async function removeTeeTime(id) {
+  if (!confirm('Remove this tee time?')) return;
+  await supabase.from('tee_times').delete().eq('id', id);
+  loadData();
+}
+
+// ── Render ──
+function render() {
+  if (!session) {
+    app.innerHTML = `
+      <div class="auth-box">
+        <h2>⛳ Course Partner Portal</h2>
+        <p>Sign in to manage your tee times on ForeSome</p>
+        <input class="auth-input" id="ae" type="email" placeholder="Email" value="${authEmail}">
+        <input class="auth-input" id="ap" type="password" placeholder="Password" value="${authPass}">
+        <button class="auth-btn" id="abtn">${authMode === 'login' ? 'SIGN IN' : 'CREATE ACCOUNT'}</button>
+        ${authError ? `<div class="auth-error">${authError}</div>` : ''}
+        <div class="auth-toggle">${authMode === 'login' ? 'New course? <a id="atoggle">Create account</a>' : 'Have an account? <a id="atoggle">Sign in</a>'}</div>
+      </div>`;
+    document.getElementById('ae').oninput = e => authEmail = e.target.value;
+    document.getElementById('ap').oninput = e => authPass = e.target.value;
+    document.getElementById('abtn').onclick = doAuth;
+    document.getElementById('atoggle').onclick = () => { authMode = authMode === 'login' ? 'signup' : 'login'; render(); };
+    return;
+  }
+
+  if (!myCourse) {
+    // Setup course
+    app.innerHTML = `
+      <div class="header"><h1>⛳ Partner Portal</h1><button class="signout" id="so">SIGN OUT</button></div>
+      <div class="card">
+        <div class="card-title">Register Your Course</div>
+        <div class="card-meta" style="margin-bottom:16px">Set up your course to start posting tee times</div>
+        <form id="cf">
+          <div class="form-group"><label class="form-label">Course Name *</label><input class="form-input" name="name" required></div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">City *</label><input class="form-input" name="city" required></div>
+            <div class="form-group"><label class="form-label">State *</label><input class="form-input" name="state" placeholder="MO" maxlength="2" required></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">ZIP</label><input class="form-input" name="zip"></div>
+            <div class="form-group"><label class="form-label">Phone</label><input class="form-input" name="phone"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Par</label><input class="form-input" name="par" type="number" value="72"></div>
+            <div class="form-group"><label class="form-label">Holes</label><input class="form-input" name="holes_count" type="number" value="18"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Latitude</label><input class="form-input" name="lat" type="number" step="any" placeholder="39.255"></div>
+            <div class="form-group"><label class="form-label">Longitude</label><input class="form-input" name="lng" type="number" step="any" placeholder="-94.487"></div>
+          </div>
+          <div class="form-group"><label class="form-label">Website</label><input class="form-input" name="website" placeholder="https://..."></div>
+          <div class="form-group"><label class="form-label">Description</label><input class="form-input" name="description" placeholder="About your course..."></div>
+          <button class="btn-primary" type="submit">REGISTER COURSE</button>
+        </form>
+      </div>`;
+    document.getElementById('so').onclick = () => supabase.auth.signOut();
+    document.getElementById('cf').onsubmit = createCourse;
+    return;
+  }
+
+  // Dashboard
+  const today = new Date().toISOString().split('T')[0];
+  const todayTimes = myTeeTimes.filter(t => t.date === today);
+  const futureTimes = myTeeTimes.filter(t => t.date > today);
+  const totalBookings = myBookings.length;
+
+  app.innerHTML = `
+    <div class="header">
+      <div><h1>${myCourse.name}</h1><span>${myCourse.city}, ${myCourse.state}</span></div>
+      <button class="signout" id="so">SIGN OUT</button>
+    </div>
+
+    <div class="tabs">
+      <div class="tab ${tab==='times'?'active':''}" data-tab="times">TEE TIMES</div>
+      <div class="tab ${tab==='add'?'active':''}" data-tab="add">+ ADD</div>
+      <div class="tab ${tab==='bookings'?'active':''}" data-tab="bookings">BOOKINGS</div>
+    </div>
+
+    ${tab === 'times' ? `
+      <div class="section-title">TODAY · ${new Date().toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'})}</div>
+      ${todayTimes.length === 0 ? '<div class="empty">No tee times posted for today</div>' :
+        todayTimes.map(t => {
+          const booked = myBookings.filter(b => b.tee_time_id === t.id);
+          return `<div class="tt-row">
+            <div class="tt-time">${t.time.slice(0,5)}</div>
+            <div class="tt-info">
+              <span>${t.holes}H · $${t.price}</span>
+              ${t.notes ? `<br><span style="font-size:10px">${t.notes}</span>` : ''}
+            </div>
+            <div class="tt-spots">${t.spots_remaining}/${t.spots_total}</div>
+            <button class="btn-danger" data-del="${t.id}">✕</button>
+          </div>`;
+        }).join('')}
+
+      ${futureTimes.length > 0 ? `
+        <div class="section-title">UPCOMING</div>
+        ${futureTimes.map(t => `<div class="tt-row">
+          <div class="tt-time">${t.time.slice(0,5)}</div>
+          <div class="tt-info">
+            <span>${t.date} · ${t.holes}H · $${t.price}</span>
+          </div>
+          <div class="tt-spots">${t.spots_remaining}/${t.spots_total}</div>
+          <button class="btn-danger" data-del="${t.id}">✕</button>
+        </div>`).join('')}
+      ` : ''}
+    ` : ''}
+
+    ${tab === 'add' ? `
+      <div class="card">
+        <div class="card-title">Post Tee Time</div>
+        <form id="ttf">
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Date *</label><input class="form-input" name="date" type="date" value="${today}" required></div>
+            <div class="form-group"><label class="form-label">Time *</label><input class="form-input" name="time" type="time" value="08:00" required></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Price ($)</label><input class="form-input" name="price" type="number" step="0.01" value="45"></div>
+            <div class="form-group"><label class="form-label">Spots</label><input class="form-input" name="spots" type="number" value="4" min="1" max="4"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Holes</label>
+              <select class="form-select" name="holes"><option value="18">18 Holes</option><option value="9">9 Holes</option></select>
+            </div>
+          </div>
+          <div class="form-group"><label class="form-label">Notes</label><input class="form-input" name="notes" placeholder="Includes cart, range balls, etc."></div>
+          <button class="btn-primary" type="submit">POST TEE TIME</button>
+        </form>
+      </div>
+    ` : ''}
+
+    ${tab === 'bookings' ? `
+      ${totalBookings === 0 ? '<div class="empty">No bookings yet</div>' :
+        myBookings.map(b => {
+          const tt = myTeeTimes.find(t => t.id === b.tee_time_id);
+          return `<div class="tt-row">
+            <div class="tt-time">${tt?.time?.slice(0,5) || '?'}</div>
+            <div class="tt-info"><span>${tt?.date || '?'} · ${b.players} player${b.players>1?'s':''}</span></div>
+            <span class="badge badge-green">${b.status.toUpperCase()}</span>
+          </div>`;
+        }).join('')}
+    ` : ''}
+  `;
+
+  document.getElementById('so').onclick = () => supabase.auth.signOut();
+  document.querySelectorAll('.tab').forEach(t => t.onclick = () => { tab = t.dataset.tab; render(); });
+  document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => removeTeeTime(b.dataset.del));
+  const ttf = document.getElementById('ttf');
+  if (ttf) ttf.onsubmit = addTeeTime;
+}
+
+loadData();
+</script>
+</body>
+</html>

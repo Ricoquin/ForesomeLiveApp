@@ -4869,3 +4869,224 @@ body {
   background: var(--bg-deep);
   border-radius: 8px;
 }
+
+/* ===== TEE TIME BOOKING ===== */
+
+/* Filter Row */
+.tt-filter-row {
+  display: flex;
+  gap: 6px;
+  padding: 0 16px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+.tt-filter-btn {
+  flex: 1;
+  padding: 8px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-dim);
+  background: transparent;
+  transition: all 0.15s;
+}
+.tt-filter-btn.active {
+  background: rgba(76,175,80,0.1);
+  border-color: var(--green);
+  color: var(--green);
+}
+.tt-state-search {
+  width: 60px;
+  padding: 8px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--cream);
+  text-transform: uppercase;
+  outline: none;
+}
+.tt-state-search:focus { border-color: var(--green); }
+
+/* Tee Time Cards */
+.tt-list { padding: 0 16px; }
+.tt-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tt-card:hover { border-color: rgba(76,175,80,0.25); transform: translateY(-1px); }
+.tt-card-time {
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--cream);
+  min-width: 50px;
+}
+.tt-card-info { flex: 1; min-width: 0; }
+.tt-card-course {
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cream);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tt-card-meta {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text-faint);
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tt-card-right {
+  text-align: right;
+  flex-shrink: 0;
+}
+.tt-card-price {
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--green);
+}
+.tt-card-spots {
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--text-faint);
+  text-transform: uppercase;
+}
+
+/* Empty State */
+.tt-empty {
+  text-align: center;
+  padding: 32px 16px;
+}
+.tt-empty-icon { font-size: 32px; margin-bottom: 8px; }
+.tt-empty-text {
+  font-family: var(--display);
+  font-size: 14px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.tt-empty-sub {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text-faint);
+  letter-spacing: 0.08em;
+}
+
+/* Booking Modal */
+.booking-modal-body {
+  padding: 20px;
+  text-align: center;
+}
+.booking-course-name {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--cream);
+  margin-bottom: 2px;
+}
+.booking-course-loc {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.1em;
+  margin-bottom: 16px;
+}
+.booking-details-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.booking-detail {
+  flex: 1;
+  padding: 10px 8px;
+  background: var(--bg-deep);
+  border-radius: 10px;
+  text-align: center;
+}
+.booking-detail-label {
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--text-faint);
+  margin-bottom: 4px;
+}
+.booking-detail-value {
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--cream);
+}
+.booking-players-section {
+  text-align: center;
+  margin-bottom: 8px;
+}
+.booking-players-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 8px 0;
+}
+.booking-players-num {
+  font-family: var(--display);
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--cream);
+  min-width: 40px;
+}
+.booking-total {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+}
+
+/* Booking Card */
+.booking-card { cursor: default; }
+.booking-card:hover { transform: none; }
+.booking-confirmed-badge {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--green);
+  margin-bottom: 4px;
+}
+.booking-cancel-btn {
+  padding: 4px 10px;
+  border: 1px solid rgba(231,76,60,0.2);
+  background: transparent;
+  color: rgba(231,76,60,0.6);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}

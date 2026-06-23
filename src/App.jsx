@@ -276,6 +276,15 @@ export default function App() {
   const [showWatchModal, setShowWatchModal] = useState(false);
   const WATCH_URL = `${window.location.origin}/watch.html`;
 
+  // Tee Time Booking State
+  const [availableTeeTimes, setAvailableTeeTimes] = useState([]);
+  const [myBookings, setMyBookings] = useState([]);
+  const [teeTimeFilter, setTeeTimeFilter] = useState('today'); // today, tomorrow, week
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [selectedTeeTime, setSelectedTeeTime] = useState(null);
+  const [bookingPlayers, setBookingPlayers] = useState(1);
+  const [teeTimeSearchState, setTeeTimeSearchState] = useState('');
+
   // Manual Tracker State
   const [currentHole, setCurrentHole] = useState(1);
   const [selectedCourse, setSelectedCourse] = useState(courses.find(c => c.name.includes("Shoal Creek")) || courses[0]);
@@ -657,6 +666,78 @@ export default function App() {
     } catch (e) { console.error('fetchGroups error:', e); }
   };
 
+  // ── Tee Time Booking Functions ──
+  const getFilterDate = (filter) => {
+    const d = new Date();
+    if (filter === 'tomorrow') d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  };
+  const getFilterEndDate = (filter) => {
+    const d = new Date();
+    if (filter === 'week') d.setDate(d.getDate() + 7);
+    else if (filter === 'tomorrow') d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  };
+
+  const fetchTeeTimes = async () => {
+    try {
+      const startDate = getFilterDate(teeTimeFilter);
+      const endDate = getFilterEndDate(teeTimeFilter);
+
+      let query = supabase.from('tee_times').select('*, partner_courses(*)').eq('is_active', true).gt('spots_remaining', 0).gte('date', startDate).lte('date', endDate).order('date').order('time');
+
+      if (teeTimeSearchState) {
+        // Filter will be done client-side after fetch since we need to join
+      }
+
+      const { data, error } = await query;
+      if (!error) {
+        let filtered = data || [];
+        if (teeTimeSearchState) {
+          const st = teeTimeSearchState.toUpperCase();
+          filtered = filtered.filter(t => t.partner_courses?.state?.toUpperCase() === st);
+        }
+        setAvailableTeeTimes(filtered);
+      }
+    } catch (e) { console.error('fetchTeeTimes error:', e); }
+  };
+
+  const fetchMyBookings = async () => {
+    if (!session?.user?.id) return;
+    try {
+      const { data } = await supabase.from('bookings').select('*, tee_times(*, partner_courses(*))').eq('user_id', session.user.id).eq('status', 'confirmed').order('created_at', { ascending: false });
+      setMyBookings(data || []);
+    } catch (e) { console.error('fetchMyBookings error:', e); }
+  };
+
+  const bookTeeTime = async () => {
+    if (!session?.user?.id || !selectedTeeTime) return;
+    try {
+      const { error } = await supabase.from('bookings').insert([{
+        tee_time_id: selectedTeeTime.id,
+        user_id: session.user.id,
+        players: bookingPlayers,
+        status: 'confirmed'
+      }]);
+      if (error) { alert('Booking error: ' + error.message); return; }
+      setShowBookingModal(false);
+      setSelectedTeeTime(null);
+      setBookingPlayers(1);
+      fetchTeeTimes();
+      fetchMyBookings();
+      alert('✅ Tee time booked!');
+    } catch (e) { console.error(e); }
+  };
+
+  const cancelBooking = async (bookingId) => {
+    if (!confirm('Cancel this booking?')) return;
+    try {
+      await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId);
+      fetchMyBookings();
+      fetchTeeTimes();
+    } catch (e) { console.error(e); }
+  };
+
   const createGroup = async () => {
     if (!newGroupName.trim()) { alert('Group name is required'); return; }
     if (!session?.user?.id) return;
@@ -859,6 +940,10 @@ export default function App() {
   useEffect(() => {
     if (session?.user?.id) fetchGroups();
   }, [session?.user?.id]);
+
+  // Fetch tee times and bookings
+  useEffect(() => { fetchTeeTimes(); }, [teeTimeFilter, teeTimeSearchState]);
+  useEffect(() => { if (session?.user?.id) fetchMyBookings(); }, [session?.user?.id]);
 
   // ── GPS Tracking (only on tracker screen) ──
   useEffect(() => {
@@ -1581,15 +1666,32 @@ export default function App() {
           </div>
 
           <div className="section-head">
-            <span className="section-title">▸ Open Tee Times · Near You</span>
-            <span className="section-link">VIEW ALL →</span>
+            <span className="section-title">▸ Open Tee Times</span>
+            <span className="section-link" onClick={fetchTeeTimes}>REFRESH ↻</span>
           </div>
 
+          {/* Date Filter Tabs */}
+          <div className="tt-filter-row">
+            {['today','tomorrow','week'].map(f => (
+              <button key={f} className={`tt-filter-btn ${teeTimeFilter === f ? 'active' : ''}`} onClick={() => setTeeTimeFilter(f)}>
+                {f.toUpperCase()}
+              </button>
+            ))}
+            <input
+              className="tt-state-search"
+              placeholder="State (MO, KS…)"
+              value={teeTimeSearchState}
+              onChange={(e) => setTeeTimeSearchState(e.target.value.slice(0,2))}
+              maxLength={2}
+            />
+          </div>
+
+          {/* Course Search (for tracker) */}
           <div className="course-search-wrap" ref={courseSearchRef}>
             <input
               type="text"
               className="course-search-input"
-              placeholder="Search courses near you…"
+              placeholder="Search courses to track a round…"
               value={courseSearchQuery}
               onChange={(e) => { setCourseSearchQuery(e.target.value); setCourseSearchOpen(true); }}
               onFocus={() => setCourseSearchOpen(true)}
@@ -1617,6 +1719,99 @@ export default function App() {
               </div>
             )}
           </div>
+
+          {/* Live Tee Time Cards */}
+          {availableTeeTimes.length === 0 ? (
+            <div className="tt-empty">
+              <div className="tt-empty-icon">⛳</div>
+              <div className="tt-empty-text">No tee times available for {teeTimeFilter}</div>
+              <div className="tt-empty-sub">Courses can post times at /partner.html</div>
+            </div>
+          ) : (
+            <div className="tt-list">
+              {availableTeeTimes.map(tt => (
+                <div key={tt.id} className="tt-card" onClick={() => { setSelectedTeeTime(tt); setBookingPlayers(1); setShowBookingModal(true); }}>
+                  <div className="tt-card-time">{tt.time?.slice(0,5)}</div>
+                  <div className="tt-card-info">
+                    <div className="tt-card-course">{tt.partner_courses?.name || 'Course'}</div>
+                    <div className="tt-card-meta">{tt.partner_courses?.city}, {tt.partner_courses?.state} · {tt.holes}H{tt.notes ? ` · ${tt.notes}` : ''}</div>
+                  </div>
+                  <div className="tt-card-right">
+                    <div className="tt-card-price">${tt.price}</div>
+                    <div className="tt-card-spots">{tt.spots_remaining} spot{tt.spots_remaining !== 1 ? 's' : ''}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Booking Confirmation Modal */}
+          {showBookingModal && selectedTeeTime && (
+            <div className="player-search-overlay">
+              <div className="player-search-modal">
+                <div className="player-search-header">
+                  <span className="player-search-title">⛳ Book Tee Time</span>
+                  <button className="player-search-close" onClick={() => setShowBookingModal(false)}>✕</button>
+                </div>
+                <div className="booking-modal-body">
+                  <div className="booking-course-name">{selectedTeeTime.partner_courses?.name}</div>
+                  <div className="booking-course-loc">{selectedTeeTime.partner_courses?.city}, {selectedTeeTime.partner_courses?.state}</div>
+
+                  <div className="booking-details-row">
+                    <div className="booking-detail">
+                      <div className="booking-detail-label">DATE</div>
+                      <div className="booking-detail-value">{selectedTeeTime.date}</div>
+                    </div>
+                    <div className="booking-detail">
+                      <div className="booking-detail-label">TIME</div>
+                      <div className="booking-detail-value">{selectedTeeTime.time?.slice(0,5)}</div>
+                    </div>
+                    <div className="booking-detail">
+                      <div className="booking-detail-label">PRICE</div>
+                      <div className="booking-detail-value">${selectedTeeTime.price}</div>
+                    </div>
+                  </div>
+
+                  <div className="booking-players-section">
+                    <div className="booking-detail-label">PLAYERS</div>
+                    <div className="booking-players-stepper">
+                      <button className="stepper-btn" onClick={() => setBookingPlayers(Math.max(1, bookingPlayers - 1))}>−</button>
+                      <div className="booking-players-num">{bookingPlayers}</div>
+                      <button className="stepper-btn" onClick={() => setBookingPlayers(Math.min(selectedTeeTime.spots_remaining, bookingPlayers + 1))}>+</button>
+                    </div>
+                    <div className="booking-total">Total: ${(selectedTeeTime.price * bookingPlayers).toFixed(2)} · Pay at course</div>
+                  </div>
+
+                  <button className="cta-primary" onClick={bookTeeTime} style={{marginTop: '12px'}}>
+                    CONFIRM BOOKING
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* My Bookings */}
+          {myBookings.length > 0 && (
+            <>
+              <div className="section-head">
+                <span className="section-title">▸ My Bookings</span>
+                <span className="section-link">{myBookings.length} ACTIVE</span>
+              </div>
+              {myBookings.map(b => (
+                <div key={b.id} className="tt-card booking-card">
+                  <div className="tt-card-time">{b.tee_times?.time?.slice(0,5)}</div>
+                  <div className="tt-card-info">
+                    <div className="tt-card-course">{b.tee_times?.partner_courses?.name || 'Course'}</div>
+                    <div className="tt-card-meta">{b.tee_times?.date} · {b.players} player{b.players > 1 ? 's' : ''}</div>
+                  </div>
+                  <div className="tt-card-right">
+                    <div className="booking-confirmed-badge">✓ BOOKED</div>
+                    <button className="booking-cancel-btn" onClick={(e) => { e.stopPropagation(); cancelBooking(b.id); }}>CANCEL</button>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
 
           {/* Send to Watch Card */}
           <div className="watch-card" onClick={() => setShowWatchModal(true)}>
