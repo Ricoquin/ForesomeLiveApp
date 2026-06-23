@@ -1,7 +1,7 @@
 -- ForeSome: Tee Time Booking Engine
 -- Run this in your Supabase SQL Editor
 
--- 1. Partner Courses — courses that have joined the platform
+-- 1. Partner Courses - courses that have joined the platform
 CREATE TABLE IF NOT EXISTS partner_courses (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   owner_id uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS partner_courses (
   created_at timestamptz DEFAULT now()
 );
 
--- 2. Tee Times — available slots posted by courses
+-- 2. Tee Times - available slots posted by courses
 CREATE TABLE IF NOT EXISTS tee_times (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   course_id uuid REFERENCES partner_courses(id) ON DELETE CASCADE NOT NULL,
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS tee_times (
   created_at timestamptz DEFAULT now()
 );
 
--- 3. Bookings — user reservations
+-- 3. Bookings - user reservations
 CREATE TABLE IF NOT EXISTS bookings (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   tee_time_id uuid REFERENCES tee_times(id) ON DELETE CASCADE NOT NULL,
