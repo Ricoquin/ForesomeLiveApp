@@ -273,6 +273,8 @@ export default function App() {
   const [gpsActive, setGpsActive] = useState(false);
   const [gpsError, setGpsError] = useState(null);
   const gpsWatchRef = useRef(null);
+  const [showWatchModal, setShowWatchModal] = useState(false);
+  const WATCH_URL = `${window.location.origin}/watch.html`;
 
   // Manual Tracker State
   const [currentHole, setCurrentHole] = useState(1);
@@ -1615,6 +1617,63 @@ export default function App() {
               </div>
             )}
           </div>
+
+          {/* Send to Watch Card */}
+          <div className="watch-card" onClick={() => setShowWatchModal(true)}>
+            <div className="watch-card-icon">⌚</div>
+            <div className="watch-card-info">
+              <div className="watch-card-title">GPS on Your Watch</div>
+              <div className="watch-card-desc">Get live distance to the pin on your wrist</div>
+            </div>
+            <div className="watch-card-arrow">›</div>
+          </div>
+
+          {/* Send to Watch Modal */}
+          {showWatchModal && (
+            <div className="player-search-overlay">
+              <div className="player-search-modal">
+                <div className="player-search-header">
+                  <span className="player-search-title">⌚ Send to Watch</span>
+                  <button className="player-search-close" onClick={() => setShowWatchModal(false)}>✕</button>
+                </div>
+                <div className="watch-modal-body">
+                  <div className="watch-qr">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(WATCH_URL)}&bgcolor=1a2c20&color=f4ecd8&format=svg`}
+                      alt="QR Code for watch"
+                      width="160"
+                      height="160"
+                    />
+                  </div>
+                  <div className="watch-modal-steps">
+                    <div className="watch-step"><span className="watch-step-num">1</span> Scan QR with your watch camera</div>
+                    <div className="watch-step"><span className="watch-step-num">2</span> Or share the link to your watch</div>
+                  </div>
+                  <div className="watch-modal-buttons">
+                    {navigator.share && (
+                      <button className="watch-share-btn" onClick={() => {
+                        navigator.share({
+                          title: 'ForeSome GPS',
+                          text: 'Open this on your watch for live GPS to the pin ⛳',
+                          url: WATCH_URL
+                        }).catch(() => {});
+                      }}>
+                        📤 SHARE LINK
+                      </button>
+                    )}
+                    <button className="watch-copy-btn" onClick={() => {
+                      navigator.clipboard?.writeText(WATCH_URL).then(() => alert('Link copied!')).catch(() => {
+                        prompt('Copy this link:', WATCH_URL);
+                      });
+                    }}>
+                      📋 COPY LINK
+                    </button>
+                  </div>
+                  <div className="watch-modal-url">{WATCH_URL}</div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* My Friends Quick Access */}
           {friends.filter(f => f.status === 'accepted').length > 0 && (
