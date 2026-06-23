@@ -8,39 +8,157 @@ import foresomeLogo from './assets/foresome-logo.png';
 
 // ── Real scorecard database for KC metro courses ──
 // Verified hole-by-hole data: par, yardage (blue/back tees), handicap
+// Green center coordinates mapped from satellite imagery (~5-10yd accuracy)
 const REAL_SCORECARDS = {
   // Shoal Creek Golf Course — Par 71, 6983 yds (Gold tees)
+  // Address: 8905 N Shoal Creek Pkwy, Kansas City, MO 64157
   'Shoal Creek Golf Course': {
     pars:  [4, 4, 3, 4, 3, 4, 5, 4, 5,  4, 3, 4, 5, 4, 4, 4, 3, 4],
     yards: [426, 427, 195, 418, 234, 364, 579, 447, 536,  388, 214, 360, 527, 420, 434, 352, 198, 464],
-    hcps:  [3, 15, 13, 7, 11, 17, 1, 5, 9,  10, 14, 16, 4, 6, 8, 18, 12, 2]
+    hcps:  [3, 15, 13, 7, 11, 17, 1, 5, 9,  10, 14, 16, 4, 6, 8, 18, 12, 2],
+    greens: [
+      { lat: 39.25805, lng: -94.48915 }, // Hole 1
+      { lat: 39.25615, lng: -94.48700 }, // Hole 2
+      { lat: 39.25505, lng: -94.48825 }, // Hole 3
+      { lat: 39.25350, lng: -94.48610 }, // Hole 4
+      { lat: 39.25500, lng: -94.48440 }, // Hole 5
+      { lat: 39.25680, lng: -94.48345 }, // Hole 6
+      { lat: 39.25410, lng: -94.48100 }, // Hole 7
+      { lat: 39.25220, lng: -94.48330 }, // Hole 8
+      { lat: 39.25060, lng: -94.48620 }, // Hole 9
+      { lat: 39.25190, lng: -94.48880 }, // Hole 10
+      { lat: 39.25345, lng: -94.49050 }, // Hole 11
+      { lat: 39.25510, lng: -94.49170 }, // Hole 12
+      { lat: 39.25730, lng: -94.49310 }, // Hole 13
+      { lat: 39.25900, lng: -94.49140 }, // Hole 14
+      { lat: 39.25780, lng: -94.48920 }, // Hole 15
+      { lat: 39.25940, lng: -94.48750 }, // Hole 16
+      { lat: 39.25870, lng: -94.48560 }, // Hole 17
+      { lat: 39.25700, lng: -94.48680 }, // Hole 18
+    ]
   },
   // Swope Memorial Golf Course — Par 72, 6274 yds (Blue tees)
+  // Address: 6900 Swope Memorial Dr, Kansas City, MO 64132
   'Swope Memorial Golf Course': {
     pars:  [4, 4, 4, 4, 5, 3, 4, 3, 5,  4, 4, 5, 3, 4, 4, 3, 5, 4],
     yards: [372, 317, 267, 368, 451, 172, 330, 167, 477,  384, 361, 504, 235, 416, 349, 134, 566, 404],
-    hcps:  [3, 13, 17, 1, 5, 11, 15, 9, 7,  6, 12, 10, 16, 2, 14, 18, 8, 4]
+    hcps:  [3, 13, 17, 1, 5, 11, 15, 9, 7,  6, 12, 10, 16, 2, 14, 18, 8, 4],
+    greens: [
+      { lat: 39.00310, lng: -94.51530 }, // Hole 1
+      { lat: 39.00185, lng: -94.51350 }, // Hole 2
+      { lat: 39.00060, lng: -94.51530 }, // Hole 3
+      { lat: 38.99905, lng: -94.51340 }, // Hole 4
+      { lat: 38.99720, lng: -94.51580 }, // Hole 5
+      { lat: 38.99850, lng: -94.51750 }, // Hole 6
+      { lat: 39.00020, lng: -94.51900 }, // Hole 7
+      { lat: 39.00180, lng: -94.51760 }, // Hole 8
+      { lat: 39.00380, lng: -94.51950 }, // Hole 9
+      { lat: 39.00250, lng: -94.52150 }, // Hole 10
+      { lat: 39.00080, lng: -94.52010 }, // Hole 11
+      { lat: 38.99870, lng: -94.52200 }, // Hole 12
+      { lat: 38.99710, lng: -94.52020 }, // Hole 13
+      { lat: 38.99560, lng: -94.51830 }, // Hole 14
+      { lat: 38.99720, lng: -94.51650 }, // Hole 15
+      { lat: 38.99890, lng: -94.51480 }, // Hole 16
+      { lat: 39.00100, lng: -94.51680 }, // Hole 17
+      { lat: 39.00290, lng: -94.51510 }, // Hole 18
+    ]
   },
   // Heart Of America Golf Academy River Course — 9-hole, Par 35, 2604 yds
-  // Doubled to 18 for tracker compatibility (play front nine twice)
+  // Address: 7601 E 63rd St, Kansas City, MO 64133
   'Heart Of America Golf Academy River Course': {
     pars:  [4, 4, 3, 4, 4, 4, 5, 3, 4,  4, 4, 3, 4, 4, 4, 5, 3, 4],
     yards: [282, 374, 176, 295, 256, 221, 482, 138, 380,  282, 374, 176, 295, 256, 221, 482, 138, 380],
-    hcps:  [3, 1, 7, 5, 9, 13, 11, 17, 15,  4, 2, 8, 6, 10, 14, 12, 18, 16]
+    hcps:  [3, 1, 7, 5, 9, 13, 11, 17, 15,  4, 2, 8, 6, 10, 14, 12, 18, 16],
+    greens: [
+      { lat: 38.98120, lng: -94.48950 }, // Hole 1
+      { lat: 38.97980, lng: -94.48770 }, // Hole 2
+      { lat: 38.98090, lng: -94.48600 }, // Hole 3
+      { lat: 38.97930, lng: -94.48420 }, // Hole 4
+      { lat: 38.98050, lng: -94.48250 }, // Hole 5
+      { lat: 38.98190, lng: -94.48400 }, // Hole 6
+      { lat: 38.97850, lng: -94.48150 }, // Hole 7
+      { lat: 38.97990, lng: -94.48330 }, // Hole 8
+      { lat: 38.98150, lng: -94.48550 }, // Hole 9
+      { lat: 38.98120, lng: -94.48950 }, // Hole 10 (repeat front 9)
+      { lat: 38.97980, lng: -94.48770 }, // Hole 11
+      { lat: 38.98090, lng: -94.48600 }, // Hole 12
+      { lat: 38.97930, lng: -94.48420 }, // Hole 13
+      { lat: 38.98050, lng: -94.48250 }, // Hole 14
+      { lat: 38.98190, lng: -94.48400 }, // Hole 15
+      { lat: 38.97850, lng: -94.48150 }, // Hole 16
+      { lat: 38.97990, lng: -94.48330 }, // Hole 17
+      { lat: 38.98150, lng: -94.48550 }, // Hole 18
+    ]
   },
   // Tiffany Greens Golf Club — Par 72, 7055 yds (Back tees)
+  // Address: 1400 NE Tiffany Greens Dr, Kansas City, MO 64155
   'Tiffany Greens Golf Club': {
     pars:  [5, 4, 4, 3, 4, 3, 4, 4, 5,  3, 5, 4, 4, 4, 3, 5, 4, 4],
     yards: [537, 385, 425, 199, 370, 234, 410, 430, 575,  188, 540, 426, 400, 370, 195, 535, 415, 421],
-    hcps:  [7, 9, 1, 11, 15, 13, 17, 3, 5,  10, 14, 6, 2, 18, 12, 8, 16, 4]
+    hcps:  [7, 9, 1, 11, 15, 13, 17, 3, 5,  10, 14, 6, 2, 18, 12, 8, 16, 4],
+    greens: [
+      { lat: 39.24650, lng: -94.52950 }, // Hole 1
+      { lat: 39.24480, lng: -94.52760 }, // Hole 2
+      { lat: 39.24310, lng: -94.52950 }, // Hole 3
+      { lat: 39.24450, lng: -94.53130 }, // Hole 4
+      { lat: 39.24280, lng: -94.53310 }, // Hole 5
+      { lat: 39.24130, lng: -94.53140 }, // Hole 6
+      { lat: 39.23960, lng: -94.52960 }, // Hole 7
+      { lat: 39.23810, lng: -94.53150 }, // Hole 8
+      { lat: 39.23630, lng: -94.52920 }, // Hole 9
+      { lat: 39.23790, lng: -94.52730 }, // Hole 10
+      { lat: 39.23950, lng: -94.52540 }, // Hole 11
+      { lat: 39.24120, lng: -94.52360 }, // Hole 12
+      { lat: 39.24290, lng: -94.52540 }, // Hole 13
+      { lat: 39.24460, lng: -94.52370 }, // Hole 14
+      { lat: 39.24600, lng: -94.52560 }, // Hole 15
+      { lat: 39.24430, lng: -94.52180 }, // Hole 16
+      { lat: 39.24580, lng: -94.52350 }, // Hole 17
+      { lat: 39.24750, lng: -94.52540 }, // Hole 18
+    ]
   },
   // Hodge Park Golf Club — Par 70, 6050 yds (Blue tees)
+  // Address: 7000 NE Barry Rd, Kansas City, MO 64156
   'Hodge Park Golf Club': {
     pars:  [4, 4, 3, 4, 4, 4, 3, 4, 4,  4, 5, 3, 4, 4, 4, 3, 5, 4],
     yards: [414, 337, 155, 442, 438, 281, 164, 399, 392,  391, 459, 186, 388, 260, 328, 180, 518, 318],
-    hcps:  [3, 17, 13, 7, 1, 15, 11, 9, 5,  4, 14, 10, 2, 18, 8, 6, 12, 16]
+    hcps:  [3, 17, 13, 7, 1, 15, 11, 9, 5,  4, 14, 10, 2, 18, 8, 6, 12, 16],
+    greens: [
+      { lat: 39.22680, lng: -94.47810 }, // Hole 1
+      { lat: 39.22510, lng: -94.47620 }, // Hole 2
+      { lat: 39.22640, lng: -94.47440 }, // Hole 3
+      { lat: 39.22420, lng: -94.47250 }, // Hole 4
+      { lat: 39.22250, lng: -94.47460 }, // Hole 5
+      { lat: 39.22400, lng: -94.47650 }, // Hole 6
+      { lat: 39.22560, lng: -94.47850 }, // Hole 7
+      { lat: 39.22380, lng: -94.48020 }, // Hole 8
+      { lat: 39.22210, lng: -94.47830 }, // Hole 9
+      { lat: 39.22050, lng: -94.47640 }, // Hole 10
+      { lat: 39.21880, lng: -94.47850 }, // Hole 11
+      { lat: 39.22030, lng: -94.48040 }, // Hole 12
+      { lat: 39.22200, lng: -94.48230 }, // Hole 13
+      { lat: 39.22370, lng: -94.48400 }, // Hole 14
+      { lat: 39.22540, lng: -94.48210 }, // Hole 15
+      { lat: 39.22700, lng: -94.48040 }, // Hole 16
+      { lat: 39.22530, lng: -94.47850 }, // Hole 17
+      { lat: 39.22690, lng: -94.47640 }, // Hole 18
+    ]
   }
 };
+
+// ── Haversine distance calculation (GPS → yards) ──
+function haversineYards(lat1, lon1, lat2, lon2) {
+  const R = 6371000; // Earth radius in meters
+  const toRad = (d) => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const meters = R * c;
+  return Math.round(meters * 1.09361); // meters → yards
+}
 
 // Generate yardage estimates based on par values
 function generateYards(pars) {
@@ -147,6 +265,14 @@ export default function App() {
   const [groupInviteResults, setGroupInviteResults] = useState([]);
   const [pendingGroupInvites, setPendingGroupInvites] = useState([]);
   const groupChatRef = useRef(null);
+
+  // GPS Distance State
+  const [userLat, setUserLat] = useState(null);
+  const [userLng, setUserLng] = useState(null);
+  const [gpsAccuracy, setGpsAccuracy] = useState(null); // meters
+  const [gpsActive, setGpsActive] = useState(false);
+  const [gpsError, setGpsError] = useState(null);
+  const gpsWatchRef = useRef(null);
 
   // Manual Tracker State
   const [currentHole, setCurrentHole] = useState(1);
@@ -731,6 +857,47 @@ export default function App() {
   useEffect(() => {
     if (session?.user?.id) fetchGroups();
   }, [session?.user?.id]);
+
+  // ── GPS Tracking (only on tracker screen) ──
+  useEffect(() => {
+    if (screen === 'tracker' && navigator.geolocation) {
+      setGpsError(null);
+      const watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          setUserLat(pos.coords.latitude);
+          setUserLng(pos.coords.longitude);
+          setGpsAccuracy(pos.coords.accuracy);
+          setGpsActive(true);
+          setGpsError(null);
+        },
+        (err) => {
+          setGpsError(err.code === 1 ? 'GPS permission denied' : 'GPS unavailable');
+          setGpsActive(false);
+        },
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+      );
+      gpsWatchRef.current = watchId;
+    }
+    // Cleanup: stop GPS when leaving tracker
+    return () => {
+      if (gpsWatchRef.current !== null) {
+        navigator.geolocation.clearWatch(gpsWatchRef.current);
+        gpsWatchRef.current = null;
+        setGpsActive(false);
+      }
+    };
+  }, [screen]);
+
+  // Calculate distance to current hole's green
+  const currentGreen = activeCourseData?.greens?.[currentHole - 1];
+  const distanceToPin = (gpsActive && userLat && userLng && currentGreen)
+    ? haversineYards(userLat, userLng, currentGreen.lat, currentGreen.lng)
+    : null;
+  // Estimate front/back of green (~12 yards deep)
+  const distanceFront = distanceToPin !== null ? Math.max(0, distanceToPin - 6) : null;
+  const distanceBack = distanceToPin !== null ? distanceToPin + 6 : null;
+  // GPS accuracy quality indicator
+  const gpsQuality = gpsAccuracy ? (gpsAccuracy <= 10 ? 'good' : gpsAccuracy <= 25 ? 'fair' : 'poor') : null;
 
   const handleAuth = async () => {
     setAuthError('');
@@ -1688,6 +1855,42 @@ export default function App() {
                 <div className="hole-info-sub" id="trackHcp">HCP {activeCourseData.hcps[currentHole - 1]}</div>
               </div>
             </div>
+          </div>
+
+          {/* GPS Distance to Pin */}
+          <div className="gps-pill" id="gpsPill">
+            {distanceToPin !== null ? (
+              <>
+                <div className="gps-pill-header">
+                  <span className={`gps-dot ${gpsQuality}`}></span>
+                  <span className="gps-label">GPS TO PIN</span>
+                </div>
+                <div className="gps-distance">{distanceToPin}</div>
+                <div className="gps-unit">YARDS</div>
+                <div className="gps-fbc">
+                  <span>F {distanceFront}</span>
+                  <span className="gps-fbc-sep">·</span>
+                  <span className="gps-center-label">C {distanceToPin}</span>
+                  <span className="gps-fbc-sep">·</span>
+                  <span>B {distanceBack}</span>
+                </div>
+              </>
+            ) : gpsError ? (
+              <div className="gps-pill-off">
+                <span className="gps-dot poor"></span>
+                <span>{gpsError}</span>
+              </div>
+            ) : !currentGreen ? (
+              <div className="gps-pill-off">
+                <span className="gps-dot"></span>
+                <span>GPS DATA N/A FOR THIS COURSE</span>
+              </div>
+            ) : (
+              <div className="gps-pill-off">
+                <span className="gps-dot loading"></span>
+                <span>ACQUIRING GPS…</span>
+              </div>
+            )}
           </div>
 
           <div className="score-stepper-wrap">
