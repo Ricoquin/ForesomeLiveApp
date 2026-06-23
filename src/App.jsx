@@ -533,23 +533,34 @@ export default function App() {
     if (!newGroupName.trim()) { alert('Group name is required'); return; }
     if (!session?.user?.id) return;
     try {
-      const { data, error } = await supabase.from('groups').insert([{
+      // Insert group (no .select() chain to avoid RLS issues)
+      const { error } = await supabase.from('groups').insert([{
         name: newGroupName.trim(),
         description: newGroupDesc.trim(),
         admin_id: session.user.id,
         avatar_emoji: newGroupEmoji || '⛳',
         is_private: true
-      }]).select().single();
+      }]);
 
       if (error) { alert('Error creating group: ' + error.message); return; }
 
-      // Add admin as active member
-      await supabase.from('group_members').insert([{
-        group_id: data.id,
-        user_id: session.user.id,
-        role: 'admin',
-        status: 'active'
-      }]);
+      // Fetch the newly created group to get its ID
+      const { data: newGroups } = await supabase
+        .from('groups')
+        .select('id')
+        .eq('admin_id', session.user.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (newGroups && newGroups.length > 0) {
+        // Add admin as active member
+        await supabase.from('group_members').insert([{
+          group_id: newGroups[0].id,
+          user_id: session.user.id,
+          role: 'admin',
+          status: 'active'
+        }]);
+      }
 
       setShowCreateGroup(false);
       setNewGroupName('');
