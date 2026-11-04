@@ -3,6 +3,8 @@ import { supabase } from './supabaseClient';
 import courses from './data/courses.json';
 import apiScorecards from './data/api_scorecards.json';
 import foresomeLogo from './assets/foresome-logo.png';
+import foresomeCrest from './assets/foresome-crest.png';
+import foresomeEditorial from './assets/foresome-editorial.png';
 import GameScreen from './features/games/GameScreen.jsx';
 import Rankings from './features/rankings/Rankings.jsx';
 import InsightCard from './features/insight/InsightCard.jsx';
@@ -1419,8 +1421,11 @@ export default function App() {
     return (
       <div className="stage">
         <div className="header-bar">
-          <span><img src={foresomeLogo} alt="ForeSome" style={{ height: '28px', verticalAlign: 'middle' }} /></span>
-          <button className="toggle-pro" style={{ opacity: 0.5 }}>
+          <span className="stage-brand-pill">
+            <img src={foresomeCrest} alt="ForeSome Crest" className="stage-crest-img" />
+            <img src={foresomeEditorial} alt="ForeSome" className="stage-editorial-img" />
+          </span>
+          <button className="toggle-pro" style={{ opacity: 0.75 }}>
             <span>FREE USER</span>
           </button>
         </div>
@@ -1429,13 +1434,12 @@ export default function App() {
           <div className="screen auth-screen">
             {/* Logo + Branding */}
             <div className="auth-brand">
-              <img src={foresomeLogo} alt="ForeSome" className="auth-logo" />
-              <div className="auth-tagline">Find Your Foursome</div>
-              <div className="auth-sub">Track · Compete · Connect</div>
+              <img src={foresomeLogo} alt="ForeSome — The Social Golf App" className="auth-logo" />
+              <div className="auth-sub">FIND YOUR FOURSOME · TRACK · COMPETE · CONNECT</div>
             </div>
 
             {/* Portal Selector: Golfer vs Admin / Organizer */}
-            <div style={{ display: 'flex', gap: '6px', background: 'rgba(255,255,255,0.04)', padding: '4px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', gap: '6px', background: 'rgba(255,255,255,0.03)', padding: '4px', borderRadius: '10px', border: '1px solid rgba(184, 154, 92, 0.25)', marginBottom: '10px' }}>
               <button
                 type="button"
                 onClick={() => { setAuthPortal('golfer'); setAuthError(''); }}
@@ -1444,11 +1448,11 @@ export default function App() {
                   padding: '8px 10px',
                   borderRadius: '8px',
                   border: 'none',
-                  background: authPortal === 'golfer' ? '#2bc470' : 'transparent',
-                  color: authPortal === 'golfer' ? '#04140b' : '#b7d4c0',
+                  background: authPortal === 'golfer' ? 'linear-gradient(135deg, #d4b87a 0%, #b89a5c 100%)' : 'transparent',
+                  color: authPortal === 'golfer' ? '#14231a' : '#c9bf9f',
                   fontWeight: 700,
                   fontSize: '11px',
-                  letterSpacing: '0.04em',
+                  letterSpacing: '0.06em',
                   cursor: 'pointer'
                 }}
               >
@@ -1462,11 +1466,11 @@ export default function App() {
                   padding: '8px 10px',
                   borderRadius: '8px',
                   border: 'none',
-                  background: authPortal === 'admin' ? '#2bc470' : 'transparent',
-                  color: authPortal === 'admin' ? '#04140b' : '#b7d4c0',
+                  background: authPortal === 'admin' ? 'linear-gradient(135deg, #d4b87a 0%, #b89a5c 100%)' : 'transparent',
+                  color: authPortal === 'admin' ? '#14231a' : '#c9bf9f',
                   fontWeight: 700,
                   fontSize: '11px',
-                  letterSpacing: '0.04em',
+                  letterSpacing: '0.06em',
                   cursor: 'pointer'
                 }}
               >
@@ -1475,7 +1479,7 @@ export default function App() {
             </div>
 
             {authPortal === 'admin' && (
-              <div style={{ background: 'rgba(43, 196, 112, 0.1)', border: '1px solid rgba(43, 196, 112, 0.3)', borderRadius: '10px', padding: '8px 12px', marginBottom: '10px', fontSize: '11px', color: '#b7f5d0', textAlign: 'center' }}>
+              <div style={{ background: 'rgba(184, 154, 92, 0.12)', border: '1px solid rgba(212, 184, 122, 0.35)', borderRadius: '10px', padding: '8px 12px', marginBottom: '10px', fontSize: '11px', color: '#f1ead9', textAlign: 'center' }}>
                 🛡️ <b>Admin &amp; Organizer Portal</b> — Create &amp; manage communities, leagues, and tournaments.
               </div>
             )}
@@ -1728,7 +1732,10 @@ export default function App() {
   return (
     <div className="stage" id="stage">
       <div className="header-bar">
-        <span><img src={foresomeLogo} alt="ForeSome" style={{ height: '28px', verticalAlign: 'middle' }} /></span>
+        <span className="stage-brand-pill">
+          <img src={foresomeCrest} alt="ForeSome Crest" className="stage-crest-img" />
+          <img src={foresomeEditorial} alt="ForeSome" className="stage-editorial-img" />
+        </span>
         <button 
           className={`toggle-pro ${isPro ? 'active' : ''}`} 
           id="proToggle"
@@ -1744,10 +1751,16 @@ export default function App() {
         <div className={`screen ${screen === 'home' ? '' : 'hidden'}`} id="home-screen">
           <div className="app-header">
             <div className="app-header-left">
-              <img src={foresomeLogo} alt="ForeSome" className="app-header-logo" />
-              <div>
-                <div className="app-title">ForeSome</div>
+              <img src={foresomeCrest} alt="ForeSome Crest" className="app-header-logo" />
+              <div className="app-header-brand-lockup">
+                <div className="app-title">FORESOME</div>
+                <div className="app-divider-row">
+                  <span className="app-divider-line" />
+                  <span className="app-divider-diamond">◆</span>
+                  <span className="app-divider-line" />
+                </div>
                 <div className="app-subtitle">THE SOCIAL GOLF APP</div>
+                <div className="app-subtitle-sub">FOR ALL GOLFERS</div>
               </div>
             </div>
             <div className="app-header-right" onClick={() => { if(confirm("Are you sure you want to sign out?")) supabase.auth.signOut(); }}>
@@ -2415,6 +2428,7 @@ export default function App() {
           </div>
 
           <div className="paywall-hero">
+            <img src={foresomeEditorial} alt="ForeSome" style={{ width: '175px', height: 'auto', display: 'block', margin: '0 auto 12px' }} />
             <div className="paywall-badge">FORESOME PRO</div>
             <div className="paywall-title">Elevate your game</div>
             <div className="paywall-subtitle">Join the premier golf community and unlock advanced scanning & statistics.</div>
