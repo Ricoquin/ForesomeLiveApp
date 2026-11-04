@@ -3,7 +3,7 @@ import { supabase } from '../../supabaseClient';
 import { FORMAT_LABELS, STATUS_LABELS, when, friendly, courseById } from './api';
 
 // Golfer's events home: what's coming up, what I'm signed up for, and alerts.
-export default function EventsHub({ session, active, onOpen, onCreate, onCommunities }) {
+export default function EventsHub({ session, active, onOpen, onCreate, onCommunities, onAdmin }) {
   const me = session.user.id;
   const [tab, setTab] = useState('upcoming');
   const [events, setEvents] = useState([]);
@@ -85,6 +85,7 @@ export default function EventsHub({ session, active, onOpen, onCreate, onCommuni
       <div className="cm-actions">
         <button className="fs-small-btn" onClick={onCreate}>+ Host an event</button>
         <button className="fs-small-btn ghost" onClick={onCommunities}>Communities</button>
+        {onAdmin && <button className="fs-small-btn ghost" onClick={onAdmin}>🛡️ Admin Console</button>}
       </div>
       <div className="fs-seg">
         <button className={tab === 'upcoming' ? 'on' : ''} onClick={() => setTab('upcoming')}>Upcoming</button>

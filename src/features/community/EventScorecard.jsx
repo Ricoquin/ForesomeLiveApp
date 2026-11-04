@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../supabaseClient';
 import { friendly, fmtPar } from './api';
+import HoleMapView from '../gps/HoleMapView.jsx';
 
 const blankCard = () => Array.from({ length: 18 }, (_, i) => ({ hole: i + 1, score: null, putts: null, fir: false, gir: false }));
 
@@ -101,13 +102,20 @@ export default function EventScorecard({ session, event, myReg, courseData, onCl
           <span className="fs-card-meta">Thru {myTotals.thru} · Gross {myTotals.gross ?? '—'}{myTotals.net != null ? ` · Net ${myTotals.net}` : ''}</span>
         </div>
       </div>
-      <div className="fs-holebar" role="tablist" aria-label="Hole">
-        {pars.map((_, i) => (
-          <button key={i} role="tab" aria-selected={i === hole}
-            className={`${i === hole ? 'on' : ''} ${cards[myReg.id][i].score != null ? 'done' : ''}`} onClick={() => setHole(i)}>{i + 1}</button>
-        ))}
+      <div style={{ margin: '10px 0 14px' }}>
+        <HoleMapView
+          courseName={courseData?.name || event.name}
+          currentHole={hole + 1}
+          onSelectHole={(hNum) => setHole(hNum - 1)}
+          par={par}
+          yards={courseData?.yards?.[hole] || (par === 3 ? 175 : par === 5 ? 525 : 385)}
+          hcp={hcps[hole] || (hole + 1)}
+          greenCoord={courseData?.greens?.[hole]}
+          vsParText={fmtPar(myTotals.toPar)}
+          vsParDiff={myTotals.toPar || 0}
+          compact
+        />
       </div>
-      <div className="fs-hole-info">Hole {hole + 1} · Par {par}{hcps[hole] ? ` · SI ${hcps[hole]}` : ''}</div>
 
       {players.map(p => {
         const h = cards[p.registration_id][hole];

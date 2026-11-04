@@ -1,0 +1,477 @@
+/* ── Tour-Broadcast 3D Satellite Hole GPS & LiDAR Green Putt Simulator ── */
+.hm-tour-wrap {
+  background: radial-gradient(circle at 50% 0%, #0d2618 0%, #06130c 100%);
+  color: #eef5f0;
+  padding: 12px;
+  font-family: var(--body, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);
+  user-select: none;
+  -webkit-user-select: none;
+  border-bottom: 1px solid rgba(94, 194, 70, 0.18);
+}
+
+/* Header Row: HOLE X PAR Y badge + Course title + Wind pill */
+.hm-tour-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.hm-hole-badge {
+  background: linear-gradient(145deg, #169c6c, #0d6e4b);
+  border: 1px solid #35d49a;
+  border-radius: 10px;
+  padding: 6px 11px;
+  text-align: center;
+  min-width: 68px;
+  box-shadow: 0 4px 14px rgba(13, 110, 75, 0.45);
+  flex-shrink: 0;
+}
+
+.hm-hb-top {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #ffffff;
+  line-height: 1.1;
+}
+
+.hm-hb-sub {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #b9f5dc;
+  margin-top: 2px;
+  letter-spacing: 0.05em;
+}
+
+.hm-title-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.hm-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.hm-course-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+
+.hm-wind-pill {
+  background: rgba(24, 90, 138, 0.42);
+  border: 1px solid rgba(77, 171, 247, 0.45);
+  color: #74c0fc;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.hm-exit-pill {
+  margin-left: auto;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #c3d4c8;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.hm-subtitle-hint {
+  font-size: 11px;
+  color: #84a591;
+  margin-top: 3px;
+  line-height: 1.35;
+}
+
+.hm-subtitle-hint b {
+  color: #b7d3c2;
+}
+
+/* 4-Column Yardage Telemetry Bar (FRONT | PIN | BACK | PLAYS LIKE) */
+.hm-yard-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: #060b08;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 12px;
+  padding: 8px 6px;
+  margin-bottom: 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.hm-yard-cell {
+  text-align: center;
+  border-right: 1px solid rgba(255, 255, 255, 0.09);
+  padding: 0 4px;
+}
+
+.hm-yard-cell:last-child {
+  border-right: none;
+}
+
+.hm-yard-lbl {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #7f9a89;
+  text-transform: uppercase;
+}
+
+.hm-yard-val {
+  font-size: 16px;
+  font-weight: 800;
+  margin-top: 2px;
+  line-height: 1.15;
+}
+
+.hm-yard-val.front { color: #38d976; }
+.hm-yard-val.pin { color: #ffffff; font-size: 18px; }
+.hm-yard-val.back { color: #f5a623; }
+.hm-yard-val.plays { color: #4dabf7; font-size: 14.5px; }
+
+/* Hole 1-18 Selector Strip */
+.hm-holestrip {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 2px 0 8px;
+  scrollbar-width: none;
+}
+
+.hm-holestrip::-webkit-scrollbar {
+  display: none;
+}
+
+.hm-hole-chip {
+  flex: 0 0 32px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(10, 22, 15, 0.75);
+  color: #88a493;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all 0.15s ease;
+}
+
+.hm-hole-chip.done {
+  border-color: rgba(56, 217, 118, 0.35);
+  color: #cce8d6;
+}
+
+.hm-hole-chip.active {
+  background: linear-gradient(145deg, #169c6c, #0d6e4b);
+  border-color: #38d976;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(22, 156, 108, 0.4);
+}
+
+/* Panels Grid (Stacked on mobile phone frame, side-by-side on wide screens) */
+.hm-panels-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hm-card {
+  position: relative;
+  background: #08180f;
+  border: 1px solid rgba(82, 148, 105, 0.28);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+
+/* Overlay Header Pills inside Each Canvas Card */
+.hm-card-top {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.hm-pill-title {
+  background: rgba(5, 11, 8, 0.86);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hm-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.hm-dot.green {
+  background: #2bd980;
+  box-shadow: 0 0 8px #2bd980;
+}
+
+.hm-dot.red {
+  background: #ff4d6d;
+  box-shadow: 0 0 8px #ff4d6d;
+}
+
+.hm-pill-rec {
+  background: rgba(5, 11, 8, 0.86);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #e6f2eb;
+}
+
+.hm-pill-rec span {
+  color: #4dabf7;
+}
+
+.hm-lidar-controls {
+  display: flex;
+  gap: 4px;
+  pointer-events: auto;
+}
+
+.hm-lidar-btn {
+  background: rgba(5, 11, 8, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #d5e6dc;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 5px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.hm-lidar-btn.active {
+  background: #2296f3;
+  border-color: #64b5f6;
+  color: #ffffff;
+}
+
+.hm-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: none;
+  cursor: grab;
+}
+
+.hm-canvas:active {
+  cursor: grabbing;
+}
+
+/* Bottom Telemetry Bar inside each Card */
+.hm-card-foot {
+  position: absolute;
+  bottom: 7px;
+  left: 8px;
+  right: 8px;
+  background: rgba(5, 10, 7, 0.88);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  color: #cedfd4;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.hm-c-blue { color: #4dabf7; font-weight: 700; }
+.hm-c-green { color: #38d976; font-weight: 700; }
+.hm-c-gold { color: #fcc419; font-weight: 700; }
+
+.hm-slope-legend {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: #a3bdb0;
+}
+
+.hm-slope-ramp {
+  width: 58px;
+  height: 7px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #0077ff 0%, #00e5ff 22%, #26de81 45%, #fed330 70%, #ff5252 100%);
+}
+
+/* Score & Putt Entry Dock below the GPS & Green cards */
+.hm-score-dock {
+  margin-top: 12px;
+  background: rgba(7, 16, 11, 0.92);
+  border: 1px solid rgba(56, 217, 118, 0.25);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.hm-dock-top {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr 0.95fr;
+  align-items: center;
+  gap: 6px;
+}
+
+.hm-dock-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  padding-right: 6px;
+}
+
+.hm-dock-box:last-child {
+  border-right: none;
+  padding-right: 0;
+}
+
+.hm-stepper-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hm-round-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(77, 171, 247, 0.45);
+  background: rgba(34, 150, 243, 0.14);
+  color: #74c0fc;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.hm-round-btn:active {
+  transform: scale(0.92);
+}
+
+.hm-score-readout {
+  text-align: center;
+  min-width: 56px;
+}
+
+.hm-sr-main {
+  font-size: 17px;
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 1.1;
+}
+
+.hm-sr-sub {
+  font-size: 10px;
+  font-weight: 700;
+  color: #38d976;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hm-box-caption {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #7f9a89;
+  letter-spacing: 0.08em;
+  margin-top: 3px;
+}
+
+.hm-nav-btns {
+  display: flex;
+  gap: 5px;
+  width: 100%;
+  justify-content: center;
+}
+
+.hm-hole-nav-btn {
+  border: 1px solid rgba(56, 217, 118, 0.4);
+  background: linear-gradient(145deg, #169c6c, #0d6e4b);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  flex: 1;
+}
+
+.hm-hole-nav-btn.prev {
+  flex: 0 0 32px;
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #cfe0d5;
+  padding: 8px 0;
+}
+
+.hm-stat-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.hm-stat-chip {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  color: #9ab3a4;
+  border-radius: 7px;
+  padding: 5px 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+}
+
+.hm-stat-chip.active {
+  background: rgba(22, 156, 108, 0.25);
+  border-color: #38d976;
+  color: #ffffff;
+}
+
+.hm-stat-chip.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}

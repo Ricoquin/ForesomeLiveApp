@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../supabaseClient';
 import { FORMATS, computeResults, scoreRows, validateSetup, fmtPar } from './scoring';
+import HoleMapView from '../gps/HoleMapView.jsx';
 import '../features.css';
 
 const TEAM_KEYS = ['A', 'B', 'C', 'D'];
@@ -322,13 +323,17 @@ function GamePlay({ session, initial, onBack }) {
         {results.extra && <div className="fs-result-extra"><b>{results.extra.label}:</b> {results.extra.status}</div>}
       </div>
 
-      <div className="fs-holebar" role="tablist" aria-label="Hole" ref={holebarRef}>
-        {holeIdxs.map(h => {
-          const done = rows.every(r => game.scores?.[r.id]?.[h] != null);
-          return <button key={h} role="tab" aria-selected={h === hole} className={`${h === hole ? 'on' : ''} ${done ? 'done' : ''}`} onClick={() => setHole(h)}>{h + 1}</button>;
-        })}
+      <div style={{ margin: '10px 0 14px' }}>
+        <HoleMapView
+          courseName={game.course_name || 'Course'}
+          currentHole={hole + 1}
+          onSelectHole={(hNum) => setHole(hNum - 1)}
+          par={pars[hole] || 4}
+          yards={(pars[hole] === 3 ? 175 : pars[hole] === 5 ? 525 : 385)}
+          hcp={game.settings?.strokeIndex?.[hole] || (hole + 1)}
+          compact
+        />
       </div>
-      <div className="fs-hole-info">Hole {hole + 1} · Par {pars[hole] ?? '—'}{game.settings?.strokeIndex?.[hole] ? ` · SI ${game.settings.strokeIndex[hole]}` : ''}</div>
 
       {rows.map(r => {
         const v = game.scores?.[r.id]?.[hole];

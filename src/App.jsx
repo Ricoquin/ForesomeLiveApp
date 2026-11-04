@@ -10,6 +10,7 @@ import DirectMessages from './features/chat/DirectMessages.jsx';
 import { GroupAdminPanel, GroupDiscover } from './features/groups/GroupAdmin.jsx';
 import CommunityHub from './features/community/CommunityHub.jsx';
 import useRoles from './features/community/useRoles.js';
+import HoleMapView from './features/gps/HoleMapView.jsx';
 
 
 
@@ -236,6 +237,8 @@ export default function App() {
   const [usernameInput, setUsernameInput] = useState('');
   const [handicapInput, setHandicapInput] = useState('12');
   const [authMode, setAuthMode] = useState('login'); // 'login' | 'signup'
+  const [authPortal, setAuthPortal] = useState('golfer'); // 'golfer' | 'admin'
+  const [adminCommunityInput, setAdminCommunityInput] = useState('');
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [showInstallCard, setShowInstallCard] = useState(false);
@@ -1080,28 +1083,81 @@ export default function App() {
             .toUpperCase()
             .slice(0, 2);
 
-          const { error: profileError } = await supabase.from('profiles').insert([
+          const { error: profileError } = await supabase.from('profiles').upsert(
             {
               id: data.user.id,
               username: usernameInput,
               handicap: parseInt(handicapInput, 10) || 0,
-              initials: initials || 'US'
-            }
-          ]);
+              initials: initials || 'AD'
+            },
+            { onConflict: 'id' }
+          );
 
           if (profileError) {
             console.error('Error saving profile:', profileError);
           }
-          // Show install card instead of alert
-          setShowInstallCard(true);
+
+          if (authPortal === 'admin' && adminCommunityInput.trim()) {
+            const name = adminCommunityInput.trim();
+            const slug = name
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/^-|-$/g, '') + '-' + Math.random().toString(36).slice(2, 6);
+            const { data: comm } = await supabase
+              .from('communities')
+              .insert({
+                name,
+                slug,
+                description: `${name} official golf community & events`,
+                visibility: 'public',
+                created_by: data.user.id
+              })
+              .select()
+              .single();
+            if (comm) {
+              await supabase.from('community_members').upsert(
+                { community_id: comm.id, user_id: data.user.id, role: 'owner', status: 'active' },
+                { onConflict: 'community_id,user_id' }
+              );
+            }
+          }
+
+          if (authPortal === 'admin') {
+            setScreen('organizer');
+          } else {
+            // Show install card instead of alert
+            setShowInstallCard(true);
+          }
         }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password
         });
         if (error) {
           setAuthError(error.message);
+        } else if (data?.user) {
+          // Ensure profile row exists so community/event foreign keys never fail
+          const { data: existingProf } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', data.user.id)
+            .maybeSingle();
+          if (!existingProf) {
+            const fallbackName = (data.user.email || 'Admin').split('@')[0];
+            await supabase.from('profiles').upsert(
+              {
+                id: data.user.id,
+                username: fallbackName,
+                handicap: 12,
+                initials: fallbackName.slice(0, 2).toUpperCase()
+              },
+              { onConflict: 'id' }
+            );
+          }
+          if (authPortal === 'admin') {
+            setScreen('organizer');
+          }
         }
       }
     } catch (err) {
@@ -1378,6 +1434,52 @@ export default function App() {
               <div className="auth-sub">Track · Compete · Connect</div>
             </div>
 
+            {/* Portal Selector: Golfer vs Admin / Organizer */}
+            <div style={{ display: 'flex', gap: '6px', background: 'rgba(255,255,255,0.04)', padding: '4px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', marginBottom: '10px' }}>
+              <button
+                type="button"
+                onClick={() => { setAuthPortal('golfer'); setAuthError(''); }}
+                style={{
+                  flex: 1,
+                  padding: '8px 10px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: authPortal === 'golfer' ? '#2bc470' : 'transparent',
+                  color: authPortal === 'golfer' ? '#04140b' : '#b7d4c0',
+                  fontWeight: 700,
+                  fontSize: '11px',
+                  letterSpacing: '0.04em',
+                  cursor: 'pointer'
+                }}
+              >
+                ⛳ GOLFER LOGIN
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAuthPortal('admin'); setAuthError(''); }}
+                style={{
+                  flex: 1,
+                  padding: '8px 10px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: authPortal === 'admin' ? '#2bc470' : 'transparent',
+                  color: authPortal === 'admin' ? '#04140b' : '#b7d4c0',
+                  fontWeight: 700,
+                  fontSize: '11px',
+                  letterSpacing: '0.04em',
+                  cursor: 'pointer'
+                }}
+              >
+                🛡️ ADMIN / ORGANIZER
+              </button>
+            </div>
+
+            {authPortal === 'admin' && (
+              <div style={{ background: 'rgba(43, 196, 112, 0.1)', border: '1px solid rgba(43, 196, 112, 0.3)', borderRadius: '10px', padding: '8px 12px', marginBottom: '10px', fontSize: '11px', color: '#b7f5d0', textAlign: 'center' }}>
+                🛡️ <b>Admin &amp; Organizer Portal</b> — Create &amp; manage communities, leagues, and tournaments.
+              </div>
+            )}
+
             {/* Tab Switcher */}
             <div className="auth-tabs">
               <button 
@@ -1385,14 +1487,14 @@ export default function App() {
                 className={`auth-tab ${authMode === 'login' ? 'active' : ''}`}
                 onClick={() => { setAuthMode('login'); setAuthError(''); }}
               >
-                Log In
+                {authPortal === 'admin' ? 'Admin Log In' : 'Log In'}
               </button>
               <button 
                 type="button"
                 className={`auth-tab ${authMode === 'signup' ? 'active' : ''}`}
                 onClick={() => { setAuthMode('signup'); setAuthError(''); }}
               >
-                Sign Up
+                {authPortal === 'admin' ? 'Create Admin' : 'Sign Up'}
               </button>
             </div>
 
@@ -1425,7 +1527,7 @@ export default function App() {
               {authMode === 'signup' && (
                 <>
                   <div className="auth-field">
-                    <label>Your Name</label>
+                    <label>{authPortal === 'admin' ? 'Admin / Organizer Name' : 'Your Name'}</label>
                     <input 
                       type="text" 
                       placeholder="Keith M." 
@@ -1433,6 +1535,18 @@ export default function App() {
                       onChange={(e) => setUsernameInput(e.target.value)}
                     />
                   </div>
+
+                  {authPortal === 'admin' && (
+                    <div className="auth-field">
+                      <label>Community or League Name (optional — creates immediately)</label>
+                      <input 
+                        type="text" 
+                        placeholder="KC Metro Sunday League" 
+                        value={adminCommunityInput}
+                        onChange={(e) => setAdminCommunityInput(e.target.value)}
+                      />
+                    </div>
+                  )}
 
                   <div className="auth-field">
                     <label>Golf Handicap (HCP)</label>
@@ -1451,7 +1565,11 @@ export default function App() {
                 onClick={handleAuth} 
                 disabled={authLoading}
               >
-                {authLoading ? 'Connecting...' : authMode === 'login' ? '⛳ ACCESS ACCOUNT' : '🏌️ REGISTER NOW'}
+                {authLoading
+                  ? 'Connecting...'
+                  : authPortal === 'admin'
+                    ? (authMode === 'login' ? '🛡️ ENTER ADMIN CONSOLE' : '🛡️ CREATE ADMIN ACCOUNT')
+                    : (authMode === 'login' ? '⛳ ACCESS ACCOUNT' : '🏌️ REGISTER NOW')}
               </button>
             </div>
 
@@ -1648,26 +1766,30 @@ export default function App() {
             <button onClick={() => setScreen('chat')}><span className="fs-q-icon">💬</span>Messages{dmUnread > 0 && <span className="fs-badge">{dmUnread}</span>}</button>
           </div>
 
-          {/* Workspaces: only shown for the roles this user holds */}
-          {(roles.isPlatformAdmin || roles.staffOrgs.length > 0 || roles.adminCommunities.length > 0) && (
-            <div className="cm-workspaces">
-              {roles.staffOrgs.map(o => (
-                <button key={o.id} className="cm-workspace" onClick={() => setScreen('clubhouse')}>
-                  <span className="cm-w-icon">🏌️‍♂️</span><div><b>{o.name} Clubhouse</b><span>{o.role === 'staff' ? 'Pro shop · check-in and events' : 'Operator admin · dashboard, staff, events'}</span></div>
-                </button>
-              ))}
-              {roles.adminCommunities.length > 0 && (
-                <button className="cm-workspace" onClick={() => setScreen('organizer')}>
-                  <span className="cm-w-icon">📋</span><div><b>Organizer</b><span>{roles.adminCommunities.map(c => c.name).join(' · ')}</span></div>
-                </button>
-              )}
-              {roles.isPlatformAdmin && (
-                <button className="cm-workspace" onClick={() => setScreen('platform')}>
-                  <span className="cm-w-icon">⚙</span><div><b>ForeSome admin</b><span>Operators, courses and platform admins</span></div>
-                </button>
-              )}
-            </div>
-          )}
+          {/* Workspaces: Admin & Organizer Console always accessible for Event & Community creation */}
+          <div className="cm-workspaces">
+            <button className="cm-workspace" onClick={() => setScreen('organizer')}>
+              <span className="cm-w-icon">🛡️</span>
+              <div>
+                <b>Organizer &amp; Admin Console</b>
+                <span>
+                  {roles.adminCommunities.length > 0
+                    ? `Manage ${roles.adminCommunities.map(c => c.name).join(' · ')} & events`
+                    : 'Create & manage communities, leagues, and events · Admin login'}
+                </span>
+              </div>
+            </button>
+            {roles.staffOrgs.map(o => (
+              <button key={o.id} className="cm-workspace" onClick={() => setScreen('clubhouse')}>
+                <span className="cm-w-icon">🏌️‍♂️</span><div><b>{o.name} Clubhouse</b><span>{o.role === 'staff' ? 'Pro shop · check-in and events' : 'Operator admin · dashboard, staff, events'}</span></div>
+              </button>
+            ))}
+            {roles.isPlatformAdmin && (
+              <button className="cm-workspace" onClick={() => setScreen('platform')}>
+                <span className="cm-w-icon">⚙</span><div><b>ForeSome admin</b><span>Operators, courses and platform admins</span></div>
+              </button>
+            )}
+          </div>
 
           {/* Pending Invites Banner */}
           {pendingInvites.length > 0 && (
@@ -2184,134 +2306,32 @@ export default function App() {
 
         {/* ============== TRACKER SCREEN ============== */}
         <div className={`screen ${screen === 'tracker' ? '' : 'hidden'}`} id="tracker-screen" style={{ paddingBottom: 0 }}>
-          <div className="track-header">
-            <div className="track-course">
-              <b id="trackerCourse">{selectedCourse?.name?.toUpperCase() || 'SHOAL CREEK'}</b> · {selectedTee.toUpperCase()} · MAY 17
-            </div>
-            <button className="track-exit" onClick={() => setScreen('home')}>SAVE & EXIT</button>
-          </div>
-
-          <div className="hole-progress" id="holeProgress">
-            {holeScores.map((h, i) => (
-              <div 
-                key={h.hole} 
-                className={`hole-dot ${i + 1 < currentHole ? 'done' : ''} ${i + 1 === currentHole ? 'current' : ''}`}
-              />
-            ))}
-          </div>
-
-          <div className="running-total">
-            <span>HOLE <b id="trackHoleNum">{currentHole}</b> / 18</span>
-            <span>RUNNING <b id="trackRunning">{runningTotal || '—'}</b> <span className={`vs-par ${vsParDiff > 0 ? 'over' : ''}`} id="trackVsPar">{vsParText}</span></span>
-            <span>THRU <b id="trackThru">{played}</b></span>
-          </div>
-
-          <div className="hole-hero hole-hero-split">
-            <h3 className="hole-title-center" id="trackHoleBig">Hole {currentHole}</h3>
-            <div className="hole-info-row">
-              <div className="hole-info-left">
-                <div className="hole-info-value" id="trackPar">PAR {currentPar}</div>
-              </div>
-              <div className="hole-info-right">
-                <div className="hole-info-value" id="trackYards">{activeCourseData.yards[currentHole - 1]} YDS</div>
-                <div className="hole-info-sub" id="trackHcp">HCP {activeCourseData.hcps[currentHole - 1]}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* GPS Distance to Pin */}
-          <div className="gps-pill" id="gpsPill">
-            {distanceToPin !== null ? (
-              <>
-                <div className="gps-pill-header">
-                  <span className={`gps-dot ${gpsQuality}`}></span>
-                  <span className="gps-label">GPS TO PIN</span>
-                </div>
-                <div className="gps-distance">{distanceToPin}</div>
-                <div className="gps-unit">YARDS</div>
-                <div className="gps-fbc">
-                  <span>F {distanceFront}</span>
-                  <span className="gps-fbc-sep">·</span>
-                  <span className="gps-center-label">C {distanceToPin}</span>
-                  <span className="gps-fbc-sep">·</span>
-                  <span>B {distanceBack}</span>
-                </div>
-              </>
-            ) : gpsError ? (
-              <div className="gps-pill-off">
-                <span className="gps-dot poor"></span>
-                <span>{gpsError}</span>
-              </div>
-            ) : !currentGreen ? (
-              <div className="gps-pill-off">
-                <span className="gps-dot"></span>
-                <span>GPS DATA N/A FOR THIS COURSE</span>
-              </div>
-            ) : (
-              <div className="gps-pill-off">
-                <span className="gps-dot loading"></span>
-                <span>ACQUIRING GPS…</span>
-              </div>
-            )}
-          </div>
-
-          <div className="score-stepper-wrap">
-            <div className="score-stepper-label">Your Score</div>
-            <div className="score-stepper">
-              <button className="stepper-btn" onClick={() => adjustScore(-1)}>−</button>
-              <div className="stepper-display">
-                <div className="score-val" id="trackScore">{currentHoleData.score}</div>
-                <div className="score-label" id="trackScoreLabel">{stepperLabel}</div>
-              </div>
-              <button className="stepper-btn" onClick={() => adjustScore(1)}>+</button>
-            </div>
-            <div className={stepperClass} id="trackResult">{stepperResult}</div>
-          </div>
-
-          <div className="stat-toggle-row">
-            <div 
-              className={`stat-toggle ${currentPar === 3 ? 'disabled' : ''} ${currentHoleData.fir ? 'active' : ''}`} 
-              id="firToggle" 
-              onClick={() => toggleStat('fir')}
-            >
-              <div className="toggle-icon">🎯</div>
-              <div className="toggle-label">FIR</div>
-              <div className="toggle-sub">Fairway hit</div>
-            </div>
-            <div 
-              className={`stat-toggle ${currentHoleData.gir ? 'active' : ''}`} 
-              id="girToggle" 
-              onClick={() => toggleStat('gir')}
-            >
-              <div className="toggle-icon">⛳</div>
-              <div className="toggle-label">GIR</div>
-              <div className="toggle-sub">Green in reg</div>
-            </div>
-            <div 
-              className={`stat-toggle ${currentHoleData.pen ? 'active' : ''}`} 
-              id="penToggle" 
-              onClick={() => toggleStat('pen')}
-            >
-              <div className="toggle-icon">💧</div>
-              <div className="toggle-label">PENALTY</div>
-              <div className="toggle-sub">Hazard/OB</div>
-            </div>
-          </div>
-
-          <div className="putts-row">
-            <div className="pr-label">Putts</div>
-            <div className="putts-stepper">
-              {[0, 1, 2, 3, 4].map((n) => (
-                <div 
-                  key={n} 
-                  className={`putt-pill ${currentHoleData.putts === n ? 'active' : ''}`} 
-                  onClick={() => setPutts(n)}
-                >
-                  {n === 4 ? '4+' : n}
-                </div>
-              ))}
-            </div>
-          </div>
+          <HoleMapView
+            courseName={selectedCourse?.name || 'Shoal Creek Golf Course'}
+            courseLat={selectedCourse?.latitude}
+            courseLng={selectedCourse?.longitude}
+            currentHole={currentHole}
+            onSelectHole={(h) => setCurrentHole(h)}
+            par={currentPar}
+            yards={activeCourseData.yards[currentHole - 1]}
+            hcp={activeCourseData.hcps[currentHole - 1]}
+            greenCoord={currentGreen}
+            distanceToPinGps={distanceToPin}
+            score={currentHoleData.score}
+            putts={currentHoleData.putts}
+            fir={currentHoleData.fir}
+            gir={currentHoleData.gir}
+            pen={currentHoleData.pen}
+            vsParText={vsParText}
+            vsParDiff={vsParDiff}
+            holeScores={holeScores}
+            onAdjustScore={adjustScore}
+            onAdjustPutts={setPutts}
+            onToggleStat={toggleStat}
+            onPrevHole={prevHole}
+            onNextHole={nextHole}
+            onExit={() => setScreen('home')}
+          />
 
           <div className="foursome-scores">
             <div className="fs-chip you">
@@ -2459,22 +2479,23 @@ export default function App() {
         {screen === 'events' && (
           <div className="screen" id="events-screen">
             <div style={{ padding: '14px 16px 0' }}><button className="back-btn" onClick={() => setScreen('home')}>← HOME</button></div>
-            <CommunityHub session={session} roles={roles} getCourseData={getCourseData} active start="events" openEventId={openEventId} onExit={() => setScreen('home')} />
+            <CommunityHub session={session} profile={profile} roles={roles} getCourseData={getCourseData} active start="events" openEventId={openEventId} onExit={() => setScreen('home')} />
           </div>
         )}
         {screen === 'organizer' && (
           <div className="screen" id="organizer-screen">
-            <CommunityHub session={session} roles={roles} getCourseData={getCourseData} active start="communities" onExit={() => setScreen('home')} />
+            <div style={{ padding: '14px 16px 0' }}><button className="back-btn" onClick={() => setScreen('home')}>← HOME</button></div>
+            <CommunityHub session={session} profile={profile} roles={roles} getCourseData={getCourseData} active start="admin" onExit={() => setScreen('home')} />
           </div>
         )}
         {screen === 'clubhouse' && (
           <div className="screen" id="clubhouse-screen">
-            <CommunityHub session={session} roles={roles} getCourseData={getCourseData} active start="clubhouse" onExit={() => setScreen('home')} />
+            <CommunityHub session={session} profile={profile} roles={roles} getCourseData={getCourseData} active start="clubhouse" onExit={() => setScreen('home')} />
           </div>
         )}
         {screen === 'platform' && roles.isPlatformAdmin && (
           <div className="screen" id="platform-screen">
-            <CommunityHub session={session} roles={roles} getCourseData={getCourseData} active start="platform" onExit={() => setScreen('home')} />
+            <CommunityHub session={session} profile={profile} roles={roles} getCourseData={getCourseData} active start="platform" onExit={() => setScreen('home')} />
           </div>
         )}
 

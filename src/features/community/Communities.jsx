@@ -5,10 +5,10 @@ import { when, friendly, rpc, slugify, courseById, courseList } from './api';
 const PRIVACY = { public: 'Public — anyone can join', closed: 'Closed — ask to join', secret: 'Secret — invite only' };
 
 // Leagues, clubs, tours. Directory → community page → admin tools (for its admins).
-export default function Communities({ session, roles, active, onBack, onOpenEvent, onCreateEvent }) {
-  const [view, setView] = useState({ name: 'list' });
-  if (view.name === 'create') return <CreateCommunity session={session} onCancel={() => setView({ name: 'list' })} onCreated={(id) => { roles.reload(); setView({ name: 'page', id }); }} />;
-  if (view.name === 'page') return <CommunityPage session={session} roles={roles} id={view.id} onBack={() => setView({ name: 'list' })} onOpenEvent={onOpenEvent} onCreateEvent={onCreateEvent} />;
+export default function Communities({ session, roles, active, initialView = { name: 'list' }, onBack, onOpenEvent, onCreateEvent }) {
+  const [view, setView] = useState(initialView);
+  if (view.name === 'create') return <CreateCommunity session={session} onCancel={() => (initialView.name === 'create' ? onBack() : setView({ name: 'list' }))} onCreated={(id) => { roles.reload(); setView({ name: 'page', id }); }} />;
+  if (view.name === 'page') return <CommunityPage session={session} roles={roles} id={view.id} onBack={() => (initialView.name === 'page' ? onBack() : setView({ name: 'list' }))} onOpenEvent={onOpenEvent} onCreateEvent={onCreateEvent} />;
   return <Directory session={session} roles={roles} active={active} onBack={onBack} onOpen={(id) => setView({ name: 'page', id })} onCreate={() => setView({ name: 'create' })} />;
 }
 
