@@ -1,0 +1,29 @@
+# Apple Watch app for ForeSome — generate the Xcode project with XcodeGen:
+#   brew install xcodegen && cd watch/apple && xcodegen && open ForeSomeWatch.xcodeproj
+name: ForeSomeWatch
+options:
+  bundleIdPrefix: com.foresomekc        # change to your Apple developer bundle prefix
+  deploymentTarget:
+    watchOS: "10.0"
+targets:
+  ForeSomeWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - path: ForeSomeWatch
+      - path: ../shared/courses.json
+        buildPhase: resources
+    info:
+      path: ForeSomeWatch/Info.plist
+      properties:
+        CFBundleDisplayName: ForeSome
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        WKApplication: true
+        WKWatchOnly: true                 # standalone: no iPhone app needed
+        NSLocationWhenInUseUsageDescription: ForeSome uses your location to show distances to the green.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.foresomekc.watch
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "4"

@@ -3,6 +3,13 @@ import { supabase } from './supabaseClient';
 import courses from './data/courses.json';
 import apiScorecards from './data/api_scorecards.json';
 import foresomeLogo from './assets/foresome-logo.png';
+import GameScreen from './features/games/GameScreen.jsx';
+import Rankings from './features/rankings/Rankings.jsx';
+import InsightCard from './features/insight/InsightCard.jsx';
+import DirectMessages from './features/chat/DirectMessages.jsx';
+import { GroupAdminPanel, GroupDiscover } from './features/groups/GroupAdmin.jsx';
+import CommunityHub from './features/community/CommunityHub.jsx';
+import useRoles from './features/community/useRoles.js';
 
 
 
@@ -237,6 +244,17 @@ export default function App() {
   // App navigation state
   const [screen, setScreen] = useState('home'); // 'home', 'chat', 'snap-intro', 'log', 'stats', 'camera', 'review', 'paywall'
   const [isPro, setIsPro] = useState(false);
+  const [dmUnread, setDmUnread] = useState(0);
+  // Roles: communities this user runs, course operators they staff, platform admin
+  const roles = useRoles(session);
+  const [openEventId, setOpenEventId] = useState(null);
+  // Arriving from a shared event link (/e/:id → /?event=id) opens that event after sign-in
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    let id = new URLSearchParams(window.location.search).get('event');
+    try { id = id || localStorage.getItem('fs_pending_event'); localStorage.removeItem('fs_pending_event'); } catch {}
+    if (id) { setScreen('events'); setOpenEventId(id); window.history.replaceState({}, '', '/'); }
+  }, [session?.user?.id]);
   const [savedRounds, setSavedRounds] = useState([]);
   const [loadingRounds, setLoadingRounds] = useState(false);
 
@@ -855,6 +873,20 @@ export default function App() {
       }
     } catch (e) { console.error(e); }
   };
+
+  const myGroupMembership = groupMembers.find(m => m.user_id === session?.user?.id);
+  const canManageGroup = !!selectedGroup && (selectedGroup.admin_id === session?.user?.id || (myGroupMembership?.role === 'co_admin' && myGroupMembership?.status === 'active'));
+  const canInviteToGroup = canManageGroup || (!!selectedGroup?.members_can_invite && myGroupMembership?.status === 'active');
+
+  // Live group chat: new messages appear without refreshing.
+  useEffect(() => {
+    if (screen !== 'group-detail' || !selectedGroup?.id) return;
+    const ch = supabase.channel(`group-chat-${selectedGroup.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_messages', filter: `group_id=eq.${selectedGroup.id}` },
+        () => fetchGroupDetail(selectedGroup.id))
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [screen, selectedGroup?.id]);
 
   const openGroup = (group) => {
     setSelectedGroup(group);
@@ -1607,6 +1639,35 @@ export default function App() {
               {isPro && <div className="pro-badge-top">PRO</div>}
             </div>
           </div>
+
+          {/* Quick actions: games, rankings, messages */}
+          <div className="fs-quick">
+            <button onClick={() => { setOpenEventId(null); setScreen('events'); }}><span className="fs-q-icon">🏆</span>Events</button>
+            <button onClick={() => setScreen('games')}><span className="fs-q-icon">🏌️</span>Start a game</button>
+            <button onClick={() => setScreen('rankings')}><span className="fs-q-icon">📈</span>Rankings</button>
+            <button onClick={() => setScreen('chat')}><span className="fs-q-icon">💬</span>Messages{dmUnread > 0 && <span className="fs-badge">{dmUnread}</span>}</button>
+          </div>
+
+          {/* Workspaces: only shown for the roles this user holds */}
+          {(roles.isPlatformAdmin || roles.staffOrgs.length > 0 || roles.adminCommunities.length > 0) && (
+            <div className="cm-workspaces">
+              {roles.staffOrgs.map(o => (
+                <button key={o.id} className="cm-workspace" onClick={() => setScreen('clubhouse')}>
+                  <span className="cm-w-icon">🏌️‍♂️</span><div><b>{o.name} Clubhouse</b><span>{o.role === 'staff' ? 'Pro shop · check-in and events' : 'Operator admin · dashboard, staff, events'}</span></div>
+                </button>
+              ))}
+              {roles.adminCommunities.length > 0 && (
+                <button className="cm-workspace" onClick={() => setScreen('organizer')}>
+                  <span className="cm-w-icon">📋</span><div><b>Organizer</b><span>{roles.adminCommunities.map(c => c.name).join(' · ')}</span></div>
+                </button>
+              )}
+              {roles.isPlatformAdmin && (
+                <button className="cm-workspace" onClick={() => setScreen('platform')}>
+                  <span className="cm-w-icon">⚙</span><div><b>ForeSome admin</b><span>Operators, courses and platform admins</span></div>
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Pending Invites Banner */}
           {pendingInvites.length > 0 && (
@@ -2381,82 +2442,45 @@ export default function App() {
           </div>
         </div>
 
-        {/* ============== BANTER CHAT SCREEN ============== */}
-        <div className={`screen ${screen === 'chat' ? '' : 'hidden'}`} id="chat-screen" style={{ display: 'flex', flexDirection: 'column', height: '100%', paddingBottom: 0 }}>
-          <div style={{ padding: '14px 16px 6px' }}>
-            <button className="back-btn" onClick={() => setScreen('home')}>← BACK</button>
-          </div>
-          <div className="chat-header">
-            <div className="chat-course">{selectedCourse?.name || 'Foursome'} · Banter</div>
-            <div className="chat-meta">{foursomePlayers.length + 1} / 4 PLAYERS</div>
-            <div className="chat-foursome">
-              <div className="player-dot filled">{profile?.initials || 'ME'}</div>
-              {foursomePlayers.map(p => (
-                <div key={p.id} className="player-dot filled">{p.initials || '??'}</div>
-              ))}
-              {[...Array(Math.max(0, 3 - foursomePlayers.length))].map((_, i) => (
-                <div key={`empty-chat-${i}`} className="player-dot empty">+</div>
-              ))}
-              <span className="roster-name">
-                You{foursomePlayers.map(p => ` · ${p.username?.split(' ')[0]}`).join('')}
-                {foursomePlayers.length < 3 ? ` · (${3 - foursomePlayers.length} open)` : ''}
-              </span>
-            </div>
-          </div>
+        {/* ============== DIRECT MESSAGES (friends, realtime) ============== */}
+        <div className={`screen ${screen === 'chat' ? '' : 'hidden'}`} id="chat-screen">
+          <DirectMessages session={session} friends={friends} active={screen === 'chat'}
+            onBack={() => setScreen('home')} onUnread={setDmUnread} />
+        </div>
 
-          <div className="chat-thread" id="chatThread" style={{ flex: 1, overflowY: 'auto', paddingBottom: '100px' }}>
-            <div className="chat-day">YESTERDAY · 6:24 PM</div>
-            {chatMessages.map((msg, index) => {
-              if (msg.system) {
-                return (
-                  <div key={index}>
-                    {msg.time && <div className="chat-day">{msg.time}</div>}
-                    <div className="system-msg">{msg.text}</div>
-                  </div>
-                );
-              }
-              return (
-                <div key={index} className={`msg ${msg.isMe ? 'me' : 'them'}`}>
-                  <div className="msg-stack">
-                    <div className="sender">{msg.sender}</div>
-                    <div className="bubble">{msg.text}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        {/* ============== GAMES (Best Ball, Scramble, Skins…) ============== */}
+        <div className={`screen ${screen === 'games' ? '' : 'hidden'}`} id="games-screen">
+          <GameScreen session={session} profile={profile} friends={friends} groups={groups}
+            courses={courses} getCourseData={getCourseData} active={screen === 'games'}
+            onBack={() => setScreen('home')} />
+        </div>
 
-          <div className="banter-input-area">
-            <div className="quick-reactions">
-              {['🍺 19th hole?', 'On my way', 'Running late', 'Send GPS 📍', '💸 Press the bet?'].map((reaction) => (
-                <div 
-                  key={reaction} 
-                  className="quick-chip" 
-                  onClick={() => sendQuickChat(reaction)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  {reaction}
-                </div>
-              ))}
-            </div>
-            <div className="chat-compose">
-              <textarea
-                className="chat-textarea"
-                placeholder="Type a message…"
-                value={chatInputText}
-                onChange={(e) => setChatInputText(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatText(); } }}
-                rows={1}
-              />
-              <button 
-                className="chat-send-btn"
-                onClick={sendChatText}
-                disabled={!chatInputText.trim()}
-              >
-                SEND
-              </button>
-            </div>
+        {/* ============== EVENTS & COMMUNITIES (role-based stacks) ============== */}
+        {screen === 'events' && (
+          <div className="screen" id="events-screen">
+            <div style={{ padding: '14px 16px 0' }}><button className="back-btn" onClick={() => setScreen('home')}>← HOME</button></div>
+            <CommunityHub session={session} roles={roles} getCourseData={getCourseData} active start="events" openEventId={openEventId} onExit={() => setScreen('home')} />
           </div>
+        )}
+        {screen === 'organizer' && (
+          <div className="screen" id="organizer-screen">
+            <CommunityHub session={session} roles={roles} getCourseData={getCourseData} active start="communities" onExit={() => setScreen('home')} />
+          </div>
+        )}
+        {screen === 'clubhouse' && (
+          <div className="screen" id="clubhouse-screen">
+            <CommunityHub session={session} roles={roles} getCourseData={getCourseData} active start="clubhouse" onExit={() => setScreen('home')} />
+          </div>
+        )}
+        {screen === 'platform' && roles.isPlatformAdmin && (
+          <div className="screen" id="platform-screen">
+            <CommunityHub session={session} roles={roles} getCourseData={getCourseData} active start="platform" onExit={() => setScreen('home')} />
+          </div>
+        )}
+
+        {/* ============== RANKINGS ============== */}
+        <div className={`screen ${screen === 'rankings' ? '' : 'hidden'}`} id="rankings-screen">
+          <Rankings session={session} active={screen === 'rankings'} onBack={() => setScreen('home')} />
         </div>
 
         {/* ============== STATS DASHBOARD ============== */}
@@ -2488,11 +2512,9 @@ export default function App() {
             </div>
           </div>
 
-          <div className="insight-card">
-            <div className="insight-eyebrow">▸ FORESOME INSIGHT</div>
-            <div className="insight-text">
-              You score <b>3.2 strokes better</b> when paired with players within 3 of your handicap.
-            </div>
+          <InsightCard session={session} rounds={savedRounds} />
+          <div style={{ padding: '0 16px 8px' }}>
+            <button className="fs-cta secondary" style={{ width: '100%' }} onClick={() => setScreen('rankings')}>🏆 See my course rankings</button>
           </div>
 
           <div style={{ padding: '0 16px' }}>
@@ -2985,6 +3007,7 @@ export default function App() {
               </div>
             </div>
           )}
+          <GroupDiscover session={session} active={screen === 'groups'} myGroupIds={groups.map(g => g.id)} onJoined={fetchGroups} />
         </div>
 
         {/* ============== GROUP DETAIL SCREEN ============== */}
@@ -3006,11 +3029,16 @@ export default function App() {
                 </div>
               </div>
 
+              {canManageGroup && (
+                <GroupAdminPanel session={session} group={selectedGroup} members={groupMembers}
+                  onChanged={(g) => { if (g) setSelectedGroup(prev => ({ ...prev, ...g })); fetchGroupDetail(selectedGroup.id); fetchGroups(); }} />
+              )}
+
               {/* Members */}
               <div className="gd-members-section">
                 <div className="gd-section-head">
                   <span>MEMBERS</span>
-                  {selectedGroup.myRole === 'admin' && (
+                  {canInviteToGroup && (
                     <button className="gd-invite-btn" onClick={() => setGroupInviteSearch(' ')}>+ INVITE</button>
                   )}
                 </div>
@@ -3022,11 +3050,12 @@ export default function App() {
                         <div className="gd-member-name">
                           {m.profile?.username || 'Unknown'}
                           {m.role === 'admin' && <span className="admin-badge-sm">ADMIN</span>}
+                          {m.role === 'co_admin' && <span className="admin-badge-sm">CO-ADMIN</span>}
                           {m.status === 'invited' && <span className="invited-badge-sm">INVITED</span>}
                         </div>
                         <div className="gd-member-hcp">HCP {m.profile?.handicap || '–'}</div>
                       </div>
-                      {selectedGroup.myRole === 'admin' && m.user_id !== session?.user?.id && (
+                      {canManageGroup && m.user_id !== session?.user?.id && m.user_id !== selectedGroup.admin_id && (
                         <button className="roster-remove" onClick={() => removeFromGroup(m.id)}>✕</button>
                       )}
                     </div>
