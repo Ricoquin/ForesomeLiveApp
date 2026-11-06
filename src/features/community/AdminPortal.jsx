@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../supabaseClient';
 import { FORMAT_LABELS, when, friendly, courseById } from './api';
+import RevenueForecast from './RevenueForecast';
 
 export default function AdminPortal({
   session,
@@ -21,6 +22,7 @@ export default function AdminPortal({
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
+  const [adminView, setAdminView] = useState('manage'); // 'manage' | 'forecast'
 
   // Inline Admin Account Create / Switch panel
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -201,6 +203,56 @@ export default function AdminPortal({
       {msg && <div className="fs-note">{msg}</div>}
       {err && <div className="fs-error">{err}</div>}
 
+      {/* View Switcher: Manage Events & Communities vs Season Revenue & Software Cost Forecaster */}
+      <div className="fs-seg" style={{ marginBottom: 14 }}>
+        <button
+          type="button"
+          className={adminView === 'manage' ? 'on' : ''}
+          onClick={() => setAdminView('manage')}
+        >
+          🏆 Events &amp; Communities
+        </button>
+        <button
+          type="button"
+          className={adminView === 'forecast' ? 'on' : ''}
+          onClick={() => setAdminView('forecast')}
+        >
+          📈 Revenue &amp; Cost Forecast
+        </button>
+      </div>
+
+      {adminView === 'forecast' ? (
+        <RevenueForecast initialPreset="tour" showPlatformScale={true} />
+      ) : (
+        <>
+          {/* Quick Banner to open the Season Revenue & Software Cost Forecaster */}
+          <div
+            className="fs-card"
+            style={{
+              borderColor: 'rgba(214, 178, 101, 0.35)',
+              background: 'rgba(214, 178, 101, 0.08)',
+              marginBottom: 14,
+            }}
+          >
+            <div className="fs-card-row">
+              <div>
+                <div className="fs-card-title" style={{ color: '#d6b265' }}>
+                  📈 Season Revenue &amp; Software Cost Estimator
+                </div>
+                <div className="fs-card-meta">
+                  Estimate what your club or league collects in a season, compare what software costs today, and forecast monetization.
+                </div>
+              </div>
+              <button
+                type="button"
+                className="fs-small-btn"
+                onClick={() => setAdminView('forecast')}
+              >
+                Open Calculator
+              </button>
+            </div>
+          </div>
+
       {/* Primary Quick Creation Actions */}
       <div className="fs-section-title">Quick Create</div>
       <div className="cm-row2" style={{ gap: 10, marginBottom: 14 }}>
@@ -312,6 +364,8 @@ export default function AdminPortal({
           ⚙ Operator &amp; Platform Admin
         </button>
       </div>
+        </>
+      )}
 
       {/* Modal to Create a New Admin User or Switch Admin Account */}
       {showAuthModal && (

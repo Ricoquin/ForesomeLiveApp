@@ -7,6 +7,14 @@ const PRESET_QUESTIONS = [
   { id: 'shirt', label: 'Shirt size', type: 'select', options: ['S', 'M', 'L', 'XL', 'XXL'] },
   { id: 'guests', label: 'Guest names (if any)', type: 'text' },
 ];
+
+const PRESET_ADDONS = [
+  { name: 'Mulligan Pack (2)', price: '10', max_per_player: 2, stock_count: '' },
+  { name: 'Warm-up Range Balls', price: '8', max_per_player: 2, stock_count: '' },
+  { name: 'Box Lunch & Drink Ticket', price: '18', max_per_player: 4, stock_count: '60' },
+  { name: 'Gross & Net Skins Pot', price: '20', max_per_player: 1, stock_count: '' },
+];
+
 const toLocalInput = (iso) => { if (!iso) return ''; const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
 const fromLocalInput = (v) => v ? new Date(v).toISOString() : null;
 const dollars = (c) => c == null ? '' : String(c / 100);
@@ -20,9 +28,12 @@ export default function EventEditor({ session, roles, eventId, preset = {}, onSa
     shotgun_start: false, tee_interval_minutes: 10, visibility: 'public', allow_waitlist: true,
     registration_opens_at: '', registration_closes_at: '', teequest_ref: '', community_id: preset.communityId || '',
     organization_id: preset.organizationId || '', season_id: '', invite_only_top_n: '', questions: [PRESET_QUESTIONS[0]], status: 'draft',
+    pass_processing_fee: false, allow_donations: false, fundraising_goal: '', donation_title: '',
   });
   const [fee, setFee] = useState(''); const [memberFee, setMemberFee] = useState('');
   const [ticketId, setTicketId] = useState(null);
+  const [addons, setAddons] = useState([]);
+  const [newAddon, setNewAddon] = useState({ name: '', price: '', max_per_player: '4', stock_count: '' });
   const [courseQ, setCourseQ] = useState('');
   const [seasons, setSeasons] = useState([]);
   const [custom, setCustom] = useState('');
@@ -34,12 +45,30 @@ export default function EventEditor({ session, roles, eventId, preset = {}, onSa
     (async () => {
       const { data: ev, error } = await supabase.from('events').select('*').eq('id', eventId).single();
       if (error) { setErr(friendly(error)); return; }
-      setF({ ...ev, capacity: ev.capacity ?? '', invite_only_top_n: ev.invite_only_top_n ?? '', community_id: ev.community_id || '',
-        organization_id: ev.organization_id || '', season_id: ev.season_id || '', teequest_ref: ev.teequest_ref || '',
-        starts_at: toLocalInput(ev.starts_at), registration_opens_at: toLocalInput(ev.registration_opens_at),
-        registration_closes_at: toLocalInput(ev.registration_closes_at), questions: ev.questions || [] });
+      setF({
+        ...ev,
+        capacity: ev.capacity ?? '',
+        invite_only_top_n: ev.invite_only_top_n ?? '',
+        community_id: ev.community_id || '',
+        organization_id: ev.organization_id || '',
+        season_id: ev.season_id || '',
+        teequest_ref: ev.teequest_ref || '',
+        starts_at: toLocalInput(ev.starts_at),
+        registration_opens_at: toLocalInput(ev.registration_opens_at),
+        registration_closes_at: toLocalInput(ev.registration_closes_at),
+        questions: ev.questions || [],
+        pass_processing_fee: !!ev.pass_processing_fee,
+        allow_donations: !!ev.allow_donations,
+        fundraising_goal: ev.fundraising_goal_cents ? dollars(ev.fundraising_goal_cents) : '',
+        donation_title: ev.donation_title || '',
+      });
       const { data: t } = await supabase.from('event_ticket_types').select('*').eq('event_id', eventId).order('sort_order').limit(1);
       if (t?.[0]) { setTicketId(t[0].id); setFee(dollars(t[0].price_cents)); setMemberFee(dollars(t[0].member_price_cents)); }
+      const { data: ads } = await supabase.from('event_addons').select('*').eq('event_id', eventId).order('sort_order');
+      if (ads) setAddons(ads.map(a => ({
+        id: a.id, name: a.name, price: dollars(a.price_cents),
+        max_per_player: String(a.max_per_player || 4), stock_count: a.stock_count != null ? String(a.stock_count) : '',
+      })));
     })();
   }, [eventId]);
 
@@ -54,6 +83,17 @@ export default function EventEditor({ session, roles, eventId, preset = {}, onSa
 
   const toggleQ = (q) => set({ questions: f.questions.some(x => x.id === q.id) ? f.questions.filter(x => x.id !== q.id) : [...f.questions, q] });
   const addCustom = () => { if (!custom.trim()) return; set({ questions: [...f.questions, { id: `q${Date.now()}`, label: custom.trim(), type: 'text' }] }); setCustom(''); };
+
+  const addAddonItem = (item) => {
+    if (!item.name.trim() || item.price === '') return;
+    setAddons(prev => [...prev, { ...item, tempId: `tmp_${Date.now()}_${Math.random()}` }]);
+    setNewAddon({ name: '', price: '', max_per_player: '4', stock_count: '' });
+  };
+  const removeAddon = async (idx) => {
+    const target = addons[idx];
+    if (target?.id) await supabase.from('event_addons').delete().eq('id', target.id);
+    setAddons(prev => prev.filter((_, i) => i !== idx));
+  };
 
   const save = async (status) => {
     if (!f.name.trim()) return setErr('Give the event a name.');
@@ -70,6 +110,10 @@ export default function EventEditor({ session, roles, eventId, preset = {}, onSa
       registration_closes_at: fromLocalInput(f.registration_closes_at), teequest_ref: f.teequest_ref || null,
       community_id: f.community_id || null, organization_id: f.organization_id || null, season_id: f.season_id || null,
       invite_only_top_n: f.invite_only_top_n ? Number(f.invite_only_top_n) : null, questions: f.questions, status,
+      pass_processing_fee: !!f.pass_processing_fee,
+      allow_donations: !!f.allow_donations,
+      fundraising_goal_cents: f.fundraising_goal ? cents(f.fundraising_goal) : null,
+      donation_title: f.donation_title?.trim() || null,
     };
     let id = eventId;
     if (id) {
@@ -83,6 +127,19 @@ export default function EventEditor({ session, roles, eventId, preset = {}, onSa
     const price = cents(fee) || 0, member = cents(memberFee);
     if (ticketId) await supabase.from('event_ticket_types').update({ price_cents: price, member_price_cents: member }).eq('id', ticketId);
     else if (price || member != null) await supabase.from('event_ticket_types').insert([{ event_id: id, name: 'Entry', price_cents: price, member_price_cents: member }]);
+
+    // Save new add-ons
+    const unsavedAddons = addons.filter(a => !a.id);
+    if (unsavedAddons.length) {
+      await supabase.from('event_addons').insert(unsavedAddons.map((a, idx) => ({
+        event_id: id,
+        name: a.name.trim(),
+        price_cents: cents(a.price) || 0,
+        max_per_player: Number(a.max_per_player) || 4,
+        stock_count: a.stock_count !== '' ? Number(a.stock_count) : null,
+        sort_order: idx,
+      })));
+    }
     setBusy(false);
     onSaved(id);
   };
@@ -132,18 +189,62 @@ export default function EventEditor({ session, roles, eventId, preset = {}, onSa
         </select>
       </div>
 
-      <div className="fs-section-title">Spots and entry</div>
+      <div className="fs-section-title">Spots, Entry & Stripe Checkout</div>
       <div className="cm-row2">
         <label className="fs-field">Max players<input className="fs-input" type="number" min={1} value={f.capacity} onChange={e => set({ capacity: e.target.value })} placeholder="No limit" /></label>
         <label className="fs-field">Entry fee ($)<input className="fs-input" type="number" min={0} value={fee} onChange={e => setFee(e.target.value)} placeholder="0" /></label>
       </div>
-      {f.community_id && <label className="fs-field">Member price ($, optional)<input className="fs-input" type="number" min={0} value={memberFee} onChange={e => setMemberFee(e.target.value)} /></label>}
-      <p className="fs-footnote">Fees are collected at the course for now. Staff mark them paid at check-in.</p>
-      <label className="fs-toggle"><input type="checkbox" checked={f.allow_waitlist} onChange={e => set({ allow_waitlist: e.target.checked })} /> Waitlist when full (next player is moved up automatically)</label>
+      {f.community_id && <label className="fs-field">Member price ($, optional)<input className="fs-input" type="number" min={0} value={memberFee} onChange={e => setMemberFee(e.target.value)} placeholder="Discounted member entry" /></label>}
+      <label className="fs-toggle">
+        <input type="checkbox" checked={f.pass_processing_fee} onChange={e => set({ pass_processing_fee: e.target.checked })} />
+        Pass processing fee (2.9% + 30¢) to player as a visible line item (uncheck to absorb fee)
+      </label>
+      <label className="fs-toggle"><input type="checkbox" checked={f.allow_waitlist} onChange={e => set({ allow_waitlist: e.target.checked })} /> Waitlist when full (refunds or cancellations promote #1 automatically)</label>
       <div className="cm-stack">
         <label className="fs-field">Sign-up opens<input className="fs-input" type="datetime-local" value={f.registration_opens_at} onChange={e => set({ registration_opens_at: e.target.value })} /></label>
         <label className="fs-field">Sign-up closes<input className="fs-input" type="datetime-local" value={f.registration_closes_at} onChange={e => set({ registration_closes_at: e.target.value })} /></label>
       </div>
+
+      <div className="fs-section-title">Checkout Add-Ons (Mulligans, Range Balls, Lunch)</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+        {PRESET_ADDONS.map(p => (
+          <button key={p.name} type="button" className="fs-small-btn ghost" onClick={() => addAddonItem(p)}>
+            + {p.name} (${p.price})
+          </button>
+        ))}
+      </div>
+      {addons.map((a, idx) => (
+        <div key={a.id || a.tempId || idx} className="fs-card fs-card-row">
+          <div>
+            <div className="fs-card-title">{a.name} — ${a.price}</div>
+            <div className="fs-card-meta">Max {a.max_per_player}/player{a.stock_count ? ` · Stock: ${a.stock_count}` : ' · Unlimited'}</div>
+          </div>
+          <button type="button" className="fs-x" onClick={() => removeAddon(idx)} aria-label="Remove add-on">✕</button>
+        </div>
+      ))}
+      <div className="fs-card">
+        <div className="cm-row2">
+          <input className="fs-input" placeholder="Add-on name (e.g. Mulligan)" value={newAddon.name} onChange={e => setNewAddon({ ...newAddon, name: e.target.value })} />
+          <input className="fs-input" type="number" min={0} placeholder="Price ($)" value={newAddon.price} onChange={e => setNewAddon({ ...newAddon, price: e.target.value })} />
+        </div>
+        <div className="cm-row2">
+          <input className="fs-input" type="number" min={1} placeholder="Max per player (4)" value={newAddon.max_per_player} onChange={e => setNewAddon({ ...newAddon, max_per_player: e.target.value })} />
+          <input className="fs-input" type="number" min={1} placeholder="Total stock (optional)" value={newAddon.stock_count} onChange={e => setNewAddon({ ...newAddon, stock_count: e.target.value })} />
+        </div>
+        <button type="button" className="fs-small-btn" onClick={() => addAddonItem(newAddon)}>+ Add item to checkout</button>
+      </div>
+
+      <div className="fs-section-title">Charity & Donations</div>
+      <label className="fs-toggle">
+        <input type="checkbox" checked={f.allow_donations} onChange={e => set({ allow_donations: e.target.checked })} />
+        Accept optional donations at checkout & enable standalone charity donation link
+      </label>
+      {f.allow_donations && (
+        <div className="cm-row2">
+          <label className="fs-field">Beneficiary / Cause Title<input className="fs-input" placeholder="First Tee of Greater KC" value={f.donation_title} onChange={e => set({ donation_title: e.target.value })} /></label>
+          <label className="fs-field">Fundraising Goal ($)<input className="fs-input" type="number" min={0} placeholder="5000" value={f.fundraising_goal} onChange={e => set({ fundraising_goal: e.target.value })} /></label>
+        </div>
+      )}
 
       <div className="fs-section-title">Who can see and join</div>
       <select className="fs-input" value={f.visibility} onChange={e => set({ visibility: e.target.value })}>

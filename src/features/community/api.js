@@ -9,6 +9,18 @@ export const STATUS_LABELS = {
   pending_payment: 'Awaiting payment', confirmed: 'Confirmed', waitlisted: 'Waitlist',
   cancelled: 'Cancelled', checked_in: 'Checked in',
 };
+export const SPONSOR_BENEFIT_LABELS = {
+  hole_sign: '🪧 Hole Sign',
+  tv_logo: '📺 TV Leaderboard Logo',
+  cart_sign: '🛺 Cart Sign Logo',
+  shout_out: '📣 Announcer Shout-Out',
+};
+export const ATTENDANCE_LABELS = {
+  present: '✅ Present',
+  late: '⏰ Late',
+  left_early: '🏃 Left early',
+  absent: '❌ Absent',
+};
 
 export const courseById = (id) => courses.find(c => c.id === id) || null;
 export const courseList = courses;
@@ -17,6 +29,18 @@ export function money(cents) {
   if (!cents) return 'Free';
   return `$${(cents / 100).toFixed(cents % 100 ? 2 : 0)}`;
 }
+export function moneyExact(cents) {
+  return `$${((cents || 0) / 100).toFixed(2)}`;
+}
+export function calcProcessingFee(subtotalCents) {
+  if (!subtotalCents || subtotalCents <= 0) return 0;
+  return Math.round(subtotalCents * 0.029) + 30;
+}
+export function calcPlatformFee(subtotalCents, bps = 250) {
+  if (!subtotalCents || subtotalCents <= 0) return 0;
+  return Math.round(subtotalCents * (bps / 10000));
+}
+
 export function when(ts, opts = {}) {
   if (!ts) return '';
   const d = new Date(ts);
@@ -29,7 +53,7 @@ export const fmtPar = (n) => n == null ? '—' : n === 0 ? 'E' : n > 0 ? `+${n}`
 export function friendly(e) {
   const m = e?.message || String(e || '');
   if (/does not exist|Could not find the (function|table)/i.test(m)) {
-    return 'Events need a one-time database update. Run supabase/2026-11-community-phase1.sql in Supabase.';
+    return 'Database update needed: run supabase/2026-11-community-phase2-3.sql in Supabase SQL Editor.';
   }
   if (/row-level security/i.test(m)) return "You don't have permission to do that.";
   if (/duplicate key/i.test(m)) return 'That already exists.';
@@ -56,4 +80,33 @@ export function downloadCsv(name, rows) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// Parse CSV text for member import: supports header row (name,email,handicap,tier) or plain rows
+export function parseCsv(text) {
+  const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return [];
+  const splitRow = (row) => row.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+  const first = splitRow(lines[0]).map(h => h.toLowerCase());
+  const hasHeader = first.some(h => ['name', 'username', 'email', 'handicap', 'hcp', 'tier'].includes(h));
+  const startIdx = hasHeader ? 1 : 0;
+  return lines.slice(startIdx).map(line => {
+    const cols = splitRow(line);
+    if (hasHeader) {
+      const obj = {};
+      first.forEach((k, i) => { obj[k] = cols[i] || ''; });
+      return {
+        name: obj.name || obj.username || obj.player || cols[0] || '',
+        email: obj.email || cols[1] || '',
+        handicap: obj.handicap || obj.hcp || cols[2] || '12',
+        tier: obj.tier || cols[3] || '',
+      };
+    }
+    return {
+      name: cols[0] || '',
+      email: cols[1] || '',
+      handicap: cols[2] || '12',
+      tier: cols[3] || '',
+    };
+  }).filter(r => r.name || r.email);
 }

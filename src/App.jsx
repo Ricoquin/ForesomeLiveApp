@@ -242,8 +242,15 @@ export default function App() {
   const [authPortal, setAuthPortal] = useState('golfer'); // 'golfer' | 'admin'
   const [adminCommunityInput, setAdminCommunityInput] = useState('');
   const [authError, setAuthError] = useState('');
+  const [authNotice, setAuthNotice] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [showInstallCard, setShowInstallCard] = useState(false);
+  const [signupAvatar, setSignupAvatar] = useState('');
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileForm, setProfileForm] = useState({ username: '', handicap: '12', bio: '', avatar_url: '' });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMsg, setProfileMsg] = useState('');
   const deferredPromptRef = useRef(null);
 
   // App navigation state
@@ -426,12 +433,129 @@ export default function App() {
         .select('*')
         .eq('id', userId)
         .single();
+      let localAvatar = '';
+      try { localAvatar = localStorage.getItem(`fs_avatar_${userId}`) || ''; } catch {}
       if (!error && data) {
-        setProfile(data);
+        const merged = {
+          ...data,
+          avatar_url: data.avatar_url || localAvatar || '',
+        };
+        setProfile(merged);
+        setProfileForm({
+          username: merged.username || '',
+          handicap: String(merged.handicap ?? 12),
+          bio: merged.bio || '',
+          avatar_url: merged.avatar_url || '',
+        });
       }
     } catch (e) {
       console.error(e);
     }
+  };
+
+  // Compress and center-crop an image file into a 256x256 JPEG data URL and optionally upload to Supabase Storage
+  const processAvatarFile = (file, onDone) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = async () => {
+        const size = 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const minSide = Math.min(img.width, img.height);
+        const sx = (img.width - minSide) / 2;
+        const sy = (img.height - minSide) / 2;
+        ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.84);
+
+        // Try uploading to Supabase Storage ('avatars' or 'community-logos' bucket), fall back to compressed dataUrl
+        let finalUrl = dataUrl;
+        if (session?.user?.id) {
+          try {
+            const blob = await (await fetch(dataUrl)).blob();
+            const filePath = `avatars/${session.user.id}-${Date.now()}.jpg`;
+            const { error: upErr } = await supabase.storage
+              .from('community-logos')
+              .upload(filePath, blob, { contentType: 'image/jpeg', upsert: true });
+            if (!upErr) {
+              const { data: pub } = supabase.storage.from('community-logos').getPublicUrl(filePath);
+              if (pub?.publicUrl) finalUrl = pub.publicUrl;
+            }
+          } catch {}
+        }
+        onDone(finalUrl);
+      };
+      img.src = String(ev.target?.result || '');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const saveMyProfile = async () => {
+    if (!session?.user?.id) return;
+    setProfileSaving(true);
+    setProfileMsg('');
+    const uid = session.user.id;
+    const cleanName = (profileForm.username || 'Golfer').trim();
+    const initials = cleanName
+      .split(' ')
+      .map((s) => s[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || 'GF';
+    const hcp = parseInt(profileForm.handicap, 10) || 0;
+    const avatarUrl = profileForm.avatar_url || '';
+
+    try {
+      try {
+        if (avatarUrl) localStorage.setItem(`fs_avatar_${uid}`, avatarUrl);
+        else localStorage.removeItem(`fs_avatar_${uid}`);
+      } catch {}
+
+      await supabase.auth.updateUser({
+        data: { username: cleanName, handicap: hcp, avatar_url: avatarUrl },
+      }).catch(() => null);
+
+      // Try upserting with avatar_url + bio, fallback if avatar_url column not yet migrated
+      const { error } = await supabase.from('profiles').upsert(
+        {
+          id: uid,
+          username: cleanName,
+          initials,
+          handicap: hcp,
+          bio: profileForm.bio || null,
+          avatar_url: avatarUrl || null,
+        },
+        { onConflict: 'id' }
+      );
+      if (error) {
+        await supabase.from('profiles').upsert(
+          {
+            id: uid,
+            username: cleanName,
+            initials,
+            handicap: hcp,
+          },
+          { onConflict: 'id' }
+        );
+      }
+
+      setProfile((prev) => ({
+        ...(prev || {}),
+        id: uid,
+        username: cleanName,
+        initials,
+        handicap: hcp,
+        bio: profileForm.bio || '',
+        avatar_url: avatarUrl,
+      }));
+      setProfileMsg('Profile & photo saved!');
+    } catch (e) {
+      setProfileMsg(e.message || 'Could not save profile');
+    }
+    setProfileSaving(false);
   };
 
   const fetchRounds = async (userId) => {
@@ -1090,13 +1214,27 @@ export default function App() {
               id: data.user.id,
               username: usernameInput,
               handicap: parseInt(handicapInput, 10) || 0,
-              initials: initials || 'AD'
+              initials: initials || 'AD',
+              ...(signupAvatar ? { avatar_url: signupAvatar } : {})
             },
             { onConflict: 'id' }
           );
 
+          if (signupAvatar) {
+            try { localStorage.setItem(`fs_avatar_${data.user.id}`, signupAvatar); } catch {}
+          }
+
           if (profileError) {
-            console.error('Error saving profile:', profileError);
+            // Fallback if avatar_url column hasn't been added in Supabase yet
+            await supabase.from('profiles').upsert(
+              {
+                id: data.user.id,
+                username: usernameInput,
+                handicap: parseInt(handicapInput, 10) || 0,
+                initials: initials || 'AD'
+              },
+              { onConflict: 'id' }
+            );
           }
 
           if (authPortal === 'admin' && adminCommunityInput.trim()) {
@@ -1418,6 +1556,37 @@ export default function App() {
 
   // Auth screen render
   if (!session) {
+    const handleForgotPassword = async () => {
+      setAuthError('');
+      setAuthNotice('');
+      if (!email.trim()) {
+        setAuthError('Enter your email address above first to receive a password reset link.');
+        return;
+      }
+      try {
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: window.location.origin,
+        });
+        if (error) setAuthError(error.message);
+        else setAuthNotice('Password reset instructions sent to your email.');
+      } catch (e) {
+        setAuthError(e.message || 'Unable to send password reset email.');
+      }
+    };
+
+    const handleInstallClick = async () => {
+      const prompt = deferredPromptRef.current;
+      if (prompt) {
+        prompt.prompt();
+        const result = await prompt.userChoice;
+        if (result.outcome === 'accepted') {
+          deferredPromptRef.current = null;
+        }
+      } else {
+        setShowInstallCard(true);
+      }
+    };
+
     return (
       <div className="stage">
         <div className="header-bar">
@@ -1429,112 +1598,197 @@ export default function App() {
             <span>FREE USER</span>
           </button>
         </div>
-        <div className="phone">
-          
+        <div className="phone auth-phone-frame">
           <div className="screen auth-screen">
-            {/* Logo + Branding */}
-            <div className="auth-brand">
-              <img src={foresomeLogo} alt="ForeSome — The Social Golf App" className="auth-logo" />
-              <div className="auth-sub">FIND YOUR FOURSOME · TRACK · COMPETE · CONNECT</div>
+            {/* Top Member Portal / Switch Row */}
+            <div className="auth-top-row">
+              <span className="auth-portal-label">
+                {authPortal === 'admin' ? 'ADMIN PORTAL' : 'MEMBER PORTAL'}
+              </span>
+              <button
+                type="button"
+                className="auth-portal-switch-pill"
+                onClick={() => {
+                  setAuthPortal((prev) => (prev === 'golfer' ? 'admin' : 'golfer'));
+                  setAuthError('');
+                  setAuthNotice('');
+                }}
+              >
+                <svg width="13" height="14" viewBox="0 0 14 15" fill="none" aria-hidden="true">
+                  <path d="M3 1.5V13.5" stroke="#d6b265" strokeWidth="1.4" strokeLinecap="round" />
+                  <path d="M3 2L10.5 4.6L3 7.2V2Z" stroke="#d6b265" strokeWidth="1.3" strokeLinejoin="round" />
+                  <circle cx="7.6" cy="11.8" r="1.4" stroke="#d6b265" strokeWidth="1.2" />
+                </svg>
+                <span className="auth-switch-role">
+                  {authPortal === 'admin' ? 'Admin Login' : 'Golfer Login'}
+                </span>
+                <span className="auth-switch-sep">· Switch</span>
+              </button>
             </div>
 
-            {/* Portal Selector: Golfer vs Admin / Organizer */}
-            <div style={{ display: 'flex', gap: '6px', background: 'rgba(255,255,255,0.03)', padding: '4px', borderRadius: '10px', border: '1px solid rgba(184, 154, 92, 0.25)', marginBottom: '10px' }}>
-              <button
-                type="button"
-                onClick={() => { setAuthPortal('golfer'); setAuthError(''); }}
-                style={{
-                  flex: 1,
-                  padding: '8px 10px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: authPortal === 'golfer' ? 'linear-gradient(135deg, #d4b87a 0%, #b89a5c 100%)' : 'transparent',
-                  color: authPortal === 'golfer' ? '#14231a' : '#c9bf9f',
-                  fontWeight: 700,
-                  fontSize: '11px',
-                  letterSpacing: '0.06em',
-                  cursor: 'pointer'
-                }}
-              >
-                ⛳ GOLFER LOGIN
-              </button>
-              <button
-                type="button"
-                onClick={() => { setAuthPortal('admin'); setAuthError(''); }}
-                style={{
-                  flex: 1,
-                  padding: '8px 10px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: authPortal === 'admin' ? 'linear-gradient(135deg, #d4b87a 0%, #b89a5c 100%)' : 'transparent',
-                  color: authPortal === 'admin' ? '#14231a' : '#c9bf9f',
-                  fontWeight: 700,
-                  fontSize: '11px',
-                  letterSpacing: '0.06em',
-                  cursor: 'pointer'
-                }}
-              >
-                🛡️ ADMIN / ORGANIZER
-              </button>
+            {/* Circular Crest Medallion + Serif Wordmark + Gold Tagline */}
+            <div className="auth-brand">
+              <div className="auth-crest-ring">
+                <img src={foresomeCrest} alt="ForeSome Crest" className="auth-crest-medallion" />
+              </div>
+              <h1 className="auth-wordmark">FORESOME</h1>
+              <div className="auth-sub">
+                FIND YOUR FOURSOME · TRACK · COMPETE ·<br />
+                CONNECT
+              </div>
             </div>
 
             {authPortal === 'admin' && (
-              <div style={{ background: 'rgba(184, 154, 92, 0.12)', border: '1px solid rgba(212, 184, 122, 0.35)', borderRadius: '10px', padding: '8px 12px', marginBottom: '10px', fontSize: '11px', color: '#f1ead9', textAlign: 'center' }}>
-                🛡️ <b>Admin &amp; Organizer Portal</b> — Create &amp; manage communities, leagues, and tournaments.
+              <div className="auth-admin-banner">
+                🛡️ <b>Admin &amp; Organizer Mode</b> — Create &amp; manage communities, leagues, and events.
               </div>
             )}
 
-            {/* Tab Switcher */}
+            {/* Segmented Tab Switcher (LOG IN | SIGN UP) */}
             <div className="auth-tabs">
-              <button 
+              <button
                 type="button"
                 className={`auth-tab ${authMode === 'login' ? 'active' : ''}`}
-                onClick={() => { setAuthMode('login'); setAuthError(''); }}
+                onClick={() => { setAuthMode('login'); setAuthError(''); setAuthNotice(''); }}
               >
-                {authPortal === 'admin' ? 'Admin Log In' : 'Log In'}
+                LOG IN
               </button>
-              <button 
+              <button
                 type="button"
                 className={`auth-tab ${authMode === 'signup' ? 'active' : ''}`}
-                onClick={() => { setAuthMode('signup'); setAuthError(''); }}
+                onClick={() => { setAuthMode('signup'); setAuthError(''); setAuthNotice(''); }}
               >
-                {authPortal === 'admin' ? 'Create Admin' : 'Sign Up'}
+                SIGN UP
               </button>
             </div>
 
-            {authError && (
-              <div className="auth-error">{authError}</div>
-            )}
+            {authError && <div className="auth-error">{authError}</div>}
+            {authNotice && <div className="auth-notice">{authNotice}</div>}
 
             {/* Form */}
             <div className="auth-form">
               <div className="auth-field">
-                <label>Email Address</label>
-                <input 
-                  type="email" 
-                  placeholder="you@example.com" 
+                <label>EMAIL ADDRESS</label>
+                <input
+                  type="email"
+                  placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
 
               <div className="auth-field">
-                <label>Password</label>
-                <input 
-                  type="password" 
-                  placeholder="••••••••" 
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
+                <div className="auth-label-row">
+                  <label>PASSWORD</label>
+                  {authMode === 'login' && (
+                    <button
+                      type="button"
+                      className="auth-forgot-link"
+                      onClick={handleForgotPassword}
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <div className="auth-password-wrap">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="•••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="auth-eye-btn"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                        <line x1="1" y1="1" x2="23" y2="23" />
+                      </svg>
+                    ) : (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {authMode === 'signup' && (
                 <>
                   <div className="auth-field">
-                    <label>{authPortal === 'admin' ? 'Admin / Organizer Name' : 'Your Name'}</label>
-                    <input 
-                      type="text" 
-                      placeholder="Keith M." 
+                    <label>PROFILE PHOTO (OPTIONAL)</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div
+                        style={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: '50%',
+                          border: '1.5px solid rgba(214, 178, 101, 0.55)',
+                          background: '#07150e',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          overflow: 'hidden',
+                          flexShrink: 0,
+                          color: '#d6b265',
+                          fontWeight: 700,
+                          fontSize: 14,
+                        }}
+                      >
+                        {signupAvatar ? (
+                          <img src={signupAvatar} alt="Avatar preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          '📷'
+                        )}
+                      </div>
+                      <label
+                        style={{
+                          margin: 0,
+                          padding: '10px 14px',
+                          borderRadius: 10,
+                          border: '1px solid rgba(201, 166, 91, 0.45)',
+                          background: 'rgba(22, 48, 34, 0.75)',
+                          color: '#d6b265',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          letterSpacing: '0.1em',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {signupAvatar ? 'CHANGE PHOTO' : 'UPLOAD PHOTO'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) processAvatarFile(f, setSignupAvatar);
+                          }}
+                        />
+                      </label>
+                      {signupAvatar && (
+                        <button
+                          type="button"
+                          onClick={() => setSignupAvatar('')}
+                          style={{ background: 'none', border: 'none', color: '#9ab0a1', fontSize: 12, cursor: 'pointer' }}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="auth-field">
+                    <label>{authPortal === 'admin' ? 'ADMIN / ORGANIZER NAME' : 'YOUR NAME'}</label>
+                    <input
+                      type="text"
+                      placeholder="Keith M."
                       value={usernameInput}
                       onChange={(e) => setUsernameInput(e.target.value)}
                     />
@@ -1542,10 +1796,10 @@ export default function App() {
 
                   {authPortal === 'admin' && (
                     <div className="auth-field">
-                      <label>Community or League Name (optional — creates immediately)</label>
-                      <input 
-                        type="text" 
-                        placeholder="KC Metro Sunday League" 
+                      <label>COMMUNITY OR LEAGUE NAME (OPTIONAL)</label>
+                      <input
+                        type="text"
+                        placeholder="KC Metro Sunday League"
                         value={adminCommunityInput}
                         onChange={(e) => setAdminCommunityInput(e.target.value)}
                       />
@@ -1553,10 +1807,10 @@ export default function App() {
                   )}
 
                   <div className="auth-field">
-                    <label>Golf Handicap (HCP)</label>
-                    <input 
-                      type="number" 
-                      placeholder="12" 
+                    <label>GOLF HANDICAP (HCP)</label>
+                    <input
+                      type="number"
+                      placeholder="12"
                       value={handicapInput}
                       onChange={(e) => setHandicapInput(e.target.value)}
                     />
@@ -1564,77 +1818,52 @@ export default function App() {
                 </>
               )}
 
-              <button 
-                className="auth-submit" 
-                onClick={handleAuth} 
+              <button
+                className="auth-submit"
+                onClick={handleAuth}
                 disabled={authLoading}
               >
-                {authLoading
-                  ? 'Connecting...'
-                  : authPortal === 'admin'
-                    ? (authMode === 'login' ? '🛡️ ENTER ADMIN CONSOLE' : '🛡️ CREATE ADMIN ACCOUNT')
-                    : (authMode === 'login' ? '⛳ ACCESS ACCOUNT' : '🏌️ REGISTER NOW')}
+                <svg width="14" height="16" viewBox="0 0 14 16" fill="none" aria-hidden="true">
+                  <path d="M2.5 1.5V14.5" stroke="#0b1810" strokeWidth="1.8" strokeLinecap="round" />
+                  <path d="M2.5 2L11.5 5.2L2.5 8.4V2Z" stroke="#0b1810" strokeWidth="1.6" strokeLinejoin="round" />
+                </svg>
+                <span>
+                  {authLoading
+                    ? 'CONNECTING...'
+                    : authMode === 'login'
+                      ? 'ACCESS ACCOUNT'
+                      : 'CREATE ACCOUNT'}
+                </span>
               </button>
             </div>
 
-            {/* Install App Section — always visible on auth screen */}
-            <div style={{
-              margin: '16px 24px', padding: '18px 16px',
-              background: 'linear-gradient(135deg, rgba(184, 154, 92, 0.08), rgba(184, 154, 92, 0.02))',
-              border: '1px solid rgba(184, 154, 92, 0.2)',
-              borderRadius: '14px'
-            }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px'
-              }}>
-                <span style={{ fontSize: '20px' }}>📲</span>
-                <span style={{
-                  fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700,
-                  color: 'var(--gold)', letterSpacing: '0.12em'
-                }}>GET THE APP</span>
-              </div>
+            <div className="auth-divider" />
 
-              <div style={{
-                fontFamily: 'var(--body)', fontSize: '12px', color: 'var(--text-dim)',
-                lineHeight: 1.5, marginBottom: '12px'
-              }}>
-                Install ForeSome on your phone for the full experience — works like a real app, no app store needed.
-              </div>
-
-              {deferredPromptRef.current ? (
-                <button
-                  onClick={async () => {
-                    const prompt = deferredPromptRef.current;
-                    if (prompt) {
-                      prompt.prompt();
-                      const result = await prompt.userChoice;
-                      if (result.outcome === 'accepted') {
-                        deferredPromptRef.current = null;
-                      }
-                    }
-                  }}
-                  style={{
-                    width: '100%', padding: '12px', border: 'none', borderRadius: '10px',
-                    background: 'linear-gradient(135deg, #b89a5c 0%, #8a7240 100%)',
-                    color: '#1a2c20', fontFamily: 'var(--mono)', fontSize: '11px',
-                    fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
-                    cursor: 'pointer', boxShadow: '0 4px 16px rgba(184, 154, 92, 0.3)'
-                  }}
-                >INSTALL FORESOME</button>
-              ) : (
-                <div style={{
-                  fontFamily: 'var(--body)', fontSize: '11px', color: 'var(--text-dim)',
-                  lineHeight: 1.6
-                }}>
-                  <b style={{ color: 'var(--cream)' }}>iPhone:</b> Tap <b style={{ color: 'var(--cream)' }}>Share</b> ⬆️ → <b style={{ color: 'var(--cream)' }}>Add to Home Screen</b><br/>
-                  <b style={{ color: 'var(--cream)' }}>Android:</b> Tap <b style={{ color: 'var(--cream)' }}>⋮</b> → <b style={{ color: 'var(--cream)' }}>Install app</b>
+            {/* Compact GET THE APP Card */}
+            <div className="auth-install-strip">
+              <div className="auth-install-left">
+                <div className="auth-install-icon-box">
+                  <svg width="18" height="22" viewBox="0 0 18 22" fill="none" aria-hidden="true">
+                    <rect x="3" y="2" width="12" height="18" rx="2.5" stroke="#d6b265" strokeWidth="1.5" />
+                    <line x1="7.5" y1="17" x2="10.5" y2="17" stroke="#d6b265" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
                 </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="auth-footer">
-              KC METRO · FOR ALL GOLFERS · V0.1
+                <div className="auth-install-copy">
+                  <div className="auth-install-title">GET THE APP</div>
+                  <div className="auth-install-sub">Install ForeSome on your phone</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="auth-install-btn"
+                onClick={handleInstallClick}
+              >
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M8 2.5V10.5M8 10.5L5 7.5M8 10.5L11 7.5" stroke="#d6b265" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M2.5 11.5V12.5C2.5 13.0523 2.94772 13.5 3.5 13.5H12.5C13.0523 13.5 13.5 13.0523 13.5 12.5V11.5" stroke="#d6b265" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+                <span>INSTALL</span>
+              </button>
             </div>
 
             {/* Install App Card — shows after signup or when install is available */}
@@ -1763,11 +1992,38 @@ export default function App() {
                 <div className="app-subtitle-sub">FOR ALL GOLFERS</div>
               </div>
             </div>
-            <div className="app-header-right" onClick={() => { if(confirm("Are you sure you want to sign out?")) supabase.auth.signOut(); }}>
-              <div className="avatar" id="avatar">
-                {profile?.initials || 'RQ'}
+            <div
+              className="app-header-right"
+              title="Edit Profile & Upload Photo"
+              onClick={() => {
+                setProfileForm({
+                  username: profile?.username || session?.user?.email?.split('@')[0] || '',
+                  handicap: String(profile?.handicap ?? 12),
+                  bio: profile?.bio || '',
+                  avatar_url: profile?.avatar_url || session?.user?.user_metadata?.avatar_url || '',
+                });
+                setProfileMsg('');
+                setShowProfileModal(true);
+              }}
+            >
+              <div className="avatar" id="avatar" style={{ overflow: 'hidden', padding: 0, position: 'relative' }}>
+                {profile?.avatar_url || session?.user?.user_metadata?.avatar_url ? (
+                  <img
+                    src={profile?.avatar_url || session?.user?.user_metadata?.avatar_url}
+                    alt={profile?.username || 'Avatar'}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
+                ) : (
+                  profile?.initials || 'RQ'
+                )}
               </div>
-              {isPro && <div className="pro-badge-top">PRO</div>}
+              {isPro ? (
+                <div className="pro-badge-top">PRO</div>
+              ) : (
+                <div style={{ fontSize: 8.5, letterSpacing: '0.08em', color: 'var(--gold)', fontWeight: 700 }}>
+                  PROFILE
+                </div>
+              )}
             </div>
           </div>
 
@@ -1856,11 +2112,34 @@ export default function App() {
 
           <div className="foursome-roster">
             {/* Slot 1: You */}
-            <div className="roster-slot filled">
-              <div className="roster-avatar you">{profile?.initials || 'ME'}</div>
+            <div
+              className="roster-slot filled"
+              style={{ cursor: 'pointer' }}
+              onClick={() => {
+                setProfileForm({
+                  username: profile?.username || session?.user?.email?.split('@')[0] || '',
+                  handicap: String(profile?.handicap ?? 12),
+                  bio: profile?.bio || '',
+                  avatar_url: profile?.avatar_url || session?.user?.user_metadata?.avatar_url || '',
+                });
+                setProfileMsg('');
+                setShowProfileModal(true);
+              }}
+            >
+              <div className="roster-avatar you" style={{ overflow: 'hidden', padding: 0 }}>
+                {profile?.avatar_url || session?.user?.user_metadata?.avatar_url ? (
+                  <img
+                    src={profile?.avatar_url || session?.user?.user_metadata?.avatar_url}
+                    alt={profile?.username || 'You'}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
+                ) : (
+                  profile?.initials || 'ME'
+                )}
+              </div>
               <div className="roster-info">
                 <div className="roster-name">{profile?.username || 'You'}</div>
-                <div className="roster-detail">HCP {profile?.handicap || '–'} · You</div>
+                <div className="roster-detail">HCP {profile?.handicap || '–'} · Tap to edit photo</div>
               </div>
             </div>
 
@@ -3187,6 +3466,140 @@ export default function App() {
               <span className="icon">📊</span>
               <span>INTEL</span>
             </button>
+          </div>
+        )}
+
+        {/* ============== GOLFER PROFILE & PHOTO UPLOAD MODAL ============== */}
+        {showProfileModal && (
+          <div className="player-search-overlay" style={{ zIndex: 9999 }} onClick={() => setShowProfileModal(false)}>
+            <div className="player-search-modal" style={{ maxWidth: 360 }} onClick={(e) => e.stopPropagation()}>
+              <div className="player-search-header">
+                <span className="player-search-title">⛳ Golfer Profile &amp; Photo</span>
+                <button className="player-search-close" onClick={() => setShowProfileModal(false)}>✕</button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 16 }}>
+                <div
+                  style={{
+                    width: 88,
+                    height: 88,
+                    borderRadius: '50%',
+                    border: '2px solid #d6b265',
+                    background: '#081810',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                    marginBottom: 10,
+                    fontSize: 28,
+                    fontWeight: 800,
+                    color: '#d6b265',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
+                  }}
+                >
+                  {profileForm.avatar_url ? (
+                    <img
+                      src={profileForm.avatar_url}
+                      alt="Profile preview"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    />
+                  ) : (
+                    (profileForm.username || 'GF')
+                      .split(' ')
+                      .map((s) => s[0])
+                      .join('')
+                      .toUpperCase()
+                      .slice(0, 2) || 'GF'
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <label
+                    className="fs-small-btn"
+                    style={{ cursor: 'pointer', margin: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  >
+                    📷 {profileForm.avatar_url ? 'Change Photo' : 'Upload Photo'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) {
+                          processAvatarFile(f, (url) =>
+                            setProfileForm((prev) => ({ ...prev, avatar_url: url }))
+                          );
+                        }
+                      }}
+                    />
+                  </label>
+                  {profileForm.avatar_url && (
+                    <button
+                      type="button"
+                      className="fs-small-btn ghost"
+                      onClick={() => setProfileForm((prev) => ({ ...prev, avatar_url: '' }))}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {profileMsg && <div className="fs-note" style={{ marginBottom: 10 }}>{profileMsg}</div>}
+
+              <label className="fs-field">
+                Display Name
+                <input
+                  className="fs-input"
+                  value={profileForm.username}
+                  onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
+                  placeholder="Your name"
+                />
+              </label>
+
+              <label className="fs-field">
+                Golf Handicap (HCP)
+                <input
+                  className="fs-input"
+                  type="number"
+                  value={profileForm.handicap}
+                  onChange={(e) => setProfileForm({ ...profileForm, handicap: e.target.value })}
+                  placeholder="12"
+                />
+              </label>
+
+              <label className="fs-field">
+                Short Bio / Home Course
+                <input
+                  className="fs-input"
+                  value={profileForm.bio}
+                  onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })}
+                  placeholder="e.g. Sunday skins at Swope Memorial"
+                />
+              </label>
+
+              <button
+                type="button"
+                className="fs-cta"
+                disabled={profileSaving}
+                onClick={saveMyProfile}
+                style={{ marginTop: 8 }}
+              >
+                {profileSaving ? 'Saving…' : '✓ Save Profile & Photo'}
+              </button>
+
+              <button
+                type="button"
+                className="fs-small-btn ghost"
+                style={{ width: '100%', marginTop: 10, justifyContent: 'center', color: '#e88a8a' }}
+                onClick={() => {
+                  setShowProfileModal(false);
+                  supabase.auth.signOut();
+                }}
+              >
+                Sign Out of ForeSome
+              </button>
+            </div>
           </div>
         )}
       </div>
