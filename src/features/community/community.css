@@ -71,3 +71,31 @@
 .tv-par.under { color: #d4b87a; }
 .tv-empty { margin-top: 10vh; text-align: center; font-size: 2.4vw; color: #c9bf9f; }
 .tv-foot { color: #8c8467; font-size: 1.2vw; margin-top: 2vh; }
+
+/* Responsive media queries for iOS & Android phones */
+@media (max-width: 600px) {
+  .cm-public {
+    max-width: 100%;
+    padding-top: max(14px, env(safe-area-inset-top));
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+  }
+  .cm-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cm-facts b {
+    font-size: clamp(18px, 5vw, 22px);
+  }
+  .cm-row-title {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}
+
+@media (max-width: 390px) {
+  .cm-row2 {
+    grid-template-columns: 1fr;
+  }
+  .cm-workspaces {
+    padding: 0 12px;
+  }
+}

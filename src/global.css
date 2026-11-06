@@ -1261,40 +1261,236 @@ body {
   scrollbar-width: none;
 }
 
-/* ---- Responsive: Actual phones go full-screen ---- */
-@media (max-width: 500px) {
+/* ---- Responsive: Actual phones (iOS & Android) go fluid full-screen ---- */
+@media (max-width: 600px) {
+  html,
+  body {
+    height: 100%;
+    min-height: 100dvh;
+    overscroll-behavior-y: none;
+    -webkit-text-size-adjust: 100%;
+  }
+
   .stage {
     padding: 0 !important;
     min-height: 100vh;
+    min-height: 100dvh;
+    width: 100%;
     justify-content: stretch;
   }
+
   .header-bar,
   .toggle-hint {
     display: none !important;
   }
-  .phone {
-    max-width: 100%;
-    width: 100%;
-    border-radius: 0;
-    border: none;
-    box-shadow: none;
-    height: 100vh;
-    min-height: 100vh;
+
+  .phone,
+  .auth-phone-frame {
+    max-width: 100% !important;
+    width: 100% !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    min-height: 100vh !important;
+    min-height: 100dvh !important;
   }
-  .notch { display: none; }
-  .status-bar { padding-top: 6px; }
+
+  .notch {
+    display: none !important;
+  }
+
+  .status-bar {
+    padding-top: max(8px, env(safe-area-inset-top));
+  }
+
+  .app-header {
+    padding-top: max(16px, calc(env(safe-area-inset-top) + 10px));
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+
   .screen {
-    padding-bottom: 80px;
+    padding-bottom: calc(96px + env(safe-area-inset-bottom)) !important;
   }
+
+  .auth-screen {
+    padding-top: max(20px, calc(env(safe-area-inset-top) + 12px)) !important;
+    padding-bottom: max(20px, calc(env(safe-area-inset-bottom) + 14px)) !important;
+    padding-left: max(18px, env(safe-area-inset-left)) !important;
+    padding-right: max(18px, env(safe-area-inset-right)) !important;
+  }
+
   .bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
     border-radius: 0;
+    padding-top: 10px;
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Prevent iOS Safari auto-zoom on input focus by ensuring 16px font size */
+  input,
+  select,
+  textarea,
+  .auth-field input,
+  .fs-input {
+    font-size: 16px !important;
+  }
+
+  /* Fluid modals on mobile screens */
+  .player-search-overlay {
+    padding: 12px !important;
+    align-items: flex-end !important;
+  }
+  .player-search-modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: calc(100dvh - 24px) !important;
+    overflow-y: auto !important;
+    border-radius: 20px 20px 14px 14px !important;
+    padding-bottom: max(18px, env(safe-area-inset-bottom)) !important;
   }
 }
 
-/* Desktop: centered phone preview */
-@media (min-width: 501px) {
+/* Compact / Small Phones (iPhone SE, Galaxy S Mini, Fold outer screen <= 380px) */
+@media (max-width: 380px) {
+  .auth-screen {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+  .auth-top-row {
+    margin-bottom: 10px;
+    gap: 6px;
+  }
+  .auth-portal-label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+  }
+  .auth-portal-switch-pill {
+    padding: 5px 10px;
+  }
+  .auth-switch-role,
+  .auth-switch-sep {
+    font-size: 11px;
+  }
+  .auth-crest-ring {
+    width: 90px;
+    height: 90px;
+    margin-bottom: 10px;
+  }
+  .auth-wordmark {
+    font-size: 21px;
+    letter-spacing: 0.18em;
+    padding-left: 0.18em;
+  }
+  .auth-sub {
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+  }
+  .auth-field {
+    margin-bottom: 12px;
+  }
+  .auth-field input {
+    height: 46px;
+  }
+  .auth-submit {
+    height: 48px;
+    font-size: 12px;
+  }
+  .auth-install-strip {
+    padding: 9px 10px;
+    gap: 8px;
+  }
+  .auth-install-icon-box {
+    width: 34px;
+    height: 34px;
+  }
+  .auth-install-sub {
+    font-size: 11px;
+  }
+  .app-header {
+    padding: 14px 14px 12px;
+  }
+  .app-header-logo {
+    width: 44px !important;
+    height: 44px !important;
+  }
+  .app-title {
+    font-size: 18px !important;
+  }
+  .foursome-roster {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Large Phones / Phablets (iPhone Pro Max, Plus, Pixel Pro, Galaxy Ultra 412px - 600px) */
+@media (min-width: 412px) and (max-width: 600px) {
+  .auth-screen {
+    padding-left: max(24px, env(safe-area-inset-left)) !important;
+    padding-right: max(24px, env(safe-area-inset-right)) !important;
+  }
+  .auth-crest-ring {
+    width: 122px;
+    height: 122px;
+  }
+  .auth-wordmark {
+    font-size: 27px;
+  }
+  .auth-field input {
+    height: 54px;
+  }
+  .auth-submit {
+    height: 56px;
+  }
+}
+
+/* Short Viewports & Landscape Phones — tighten vertical rhythm so nothing clips */
+@media (max-height: 740px) {
+  .auth-crest-ring {
+    width: 86px;
+    height: 86px;
+    margin-bottom: 8px;
+  }
+  .auth-brand {
+    margin-bottom: 12px;
+  }
+  .auth-wordmark {
+    font-size: 21px;
+    margin-bottom: 4px;
+  }
+  .auth-tabs {
+    margin-bottom: 14px;
+  }
+  .auth-field {
+    margin-bottom: 11px;
+  }
+  .auth-field input {
+    height: 44px;
+  }
+  .auth-submit {
+    height: 46px;
+  }
+  .auth-divider {
+    margin: 12px 0 10px;
+  }
+}
+
+/* Tablet & Desktop: centered phone preview that adapts to screen height */
+@media (min-width: 601px) {
   .stage {
-    padding-top: 40px;
+    padding-top: 28px;
+    padding-bottom: 40px;
+  }
+  .phone {
+    max-width: 404px;
+    height: min(844px, calc(100dvh - 76px));
+    min-height: 680px;
   }
 }
 
@@ -3749,15 +3945,15 @@ body {
 /* ===== AUTH SCREEN ===== */
 .auth-phone-frame {
   background: linear-gradient(180deg, #132c1f 0%, #0d2116 100%) !important;
-  border: 1px solid rgba(201, 166, 91, 0.34) !important;
-  border-radius: 26px !important;
+  border: 1px solid rgba(201, 166, 91, 0.34);
+  border-radius: 26px;
   box-shadow:
     0 24px 64px rgba(0, 0, 0, 0.65),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .auth-screen {
-  padding: 20px 22px 22px !important;
+  padding: 20px 22px 22px;
   display: flex !important;
   flex-direction: column !important;
   justify-content: flex-start !important;

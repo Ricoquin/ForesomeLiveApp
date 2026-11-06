@@ -126,3 +126,45 @@
 .fs-quick button:hover { border-color: var(--gold-deep); }
 .fs-quick .fs-q-icon { font-size: 20px; }
 .fs-quick .fs-badge { position: absolute; top: 6px; right: 8px; }
+
+/* Responsive adjustments for iOS & Android phones */
+@media (max-width: 600px) {
+  .fs-page {
+    padding-top: max(14px, calc(env(safe-area-inset-top) + 8px));
+    padding-bottom: calc(116px + env(safe-area-inset-bottom));
+    padding-left: max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+  }
+  .fs-h1 {
+    font-size: clamp(24px, 6.5vw, 30px);
+  }
+  .fs-seg {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .fs-seg::-webkit-scrollbar {
+    display: none;
+  }
+  .fs-seg button {
+    min-height: 38px;
+  }
+}
+
+@media (max-width: 380px) {
+  .fs-quick {
+    gap: 6px;
+    padding: 0 12px;
+  }
+  .fs-quick button {
+    padding: 10px 4px;
+    font-size: 11px;
+  }
+  .fs-format-grid {
+    grid-template-columns: 1fr;
+  }
+  .fs-card {
+    padding: 12px;
+  }
+}
