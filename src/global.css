@@ -5456,15 +5456,20 @@ body {
     display: none !important;
   }
 
+  /* Pin the app frame to the physical screen edges. Height units (vh/dvh) disagree
+     with the real screen on iOS home-screen apps, which left a green gap under the nav. */
   .phone,
   .auth-phone-frame {
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
-    height: 100vh !important;
-    height: 100dvh !important;
-    min-height: 100vh !important;
-    min-height: 100dvh !important;
-    max-height: 100dvh !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
     border-radius: 0 !important;
     border: none !important;
     box-shadow: none !important;
@@ -5566,6 +5571,8 @@ body {
     max-width: 100% !important;
     max-height: calc(100dvh - 24px) !important;
     overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom)) !important;
   }
 }
 

@@ -493,6 +493,22 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
+  // Sign out that always works: clears the local session even if the server call fails
+  // (expired token, offline), then resets app state so the login screen shows.
+  const handleSignOut = async () => {
+    setShowProfileModal(false);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) await supabase.auth.signOut({ scope: 'local' });
+    } catch {
+      try { await supabase.auth.signOut({ scope: 'local' }); } catch {}
+    }
+    setSession(null);
+    setProfile(null);
+    setSavedRounds([]);
+    setScreen('home');
+  };
+
   const saveMyProfile = async () => {
     if (!session?.user?.id) return;
     setProfileSaving(true);
@@ -3475,7 +3491,17 @@ export default function App() {
             <div className="player-search-modal" style={{ maxWidth: 360 }} onClick={(e) => e.stopPropagation()}>
               <div className="player-search-header">
                 <span className="player-search-title">⛳ Golfer Profile &amp; Photo</span>
-                <button className="player-search-close" onClick={() => setShowProfileModal(false)}>✕</button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button
+                    type="button"
+                    className="fs-small-btn ghost"
+                    style={{ color: '#e88a8a', borderColor: 'rgba(232,138,138,0.45)', padding: '6px 12px' }}
+                    onClick={handleSignOut}
+                  >
+                    Sign Out
+                  </button>
+                  <button className="player-search-close" onClick={() => setShowProfileModal(false)}>✕</button>
+                </div>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 16 }}>
@@ -3592,10 +3618,7 @@ export default function App() {
                 type="button"
                 className="fs-small-btn ghost"
                 style={{ width: '100%', marginTop: 10, justifyContent: 'center', color: '#e88a8a' }}
-                onClick={() => {
-                  setShowProfileModal(false);
-                  supabase.auth.signOut();
-                }}
+                onClick={handleSignOut}
               >
                 Sign Out of ForeSome
               </button>
