@@ -530,8 +530,10 @@ export default function App() {
         else localStorage.removeItem(`fs_avatar_${uid}`);
       } catch {}
 
+      // Never store the avatar in auth metadata: it gets copied into the login token (JWT),
+      // which is sent on every request. A base64 photo there makes every request too large.
       await supabase.auth.updateUser({
-        data: { username: cleanName, handicap: hcp, avatar_url: avatarUrl },
+        data: { username: cleanName, handicap: hcp, avatar_url: null },
       }).catch(() => null);
 
       // Try upserting with avatar_url + bio, fallback if avatar_url column not yet migrated
@@ -2016,16 +2018,16 @@ export default function App() {
                   username: profile?.username || session?.user?.email?.split('@')[0] || '',
                   handicap: String(profile?.handicap ?? 12),
                   bio: profile?.bio || '',
-                  avatar_url: profile?.avatar_url || session?.user?.user_metadata?.avatar_url || '',
+                  avatar_url: profile?.avatar_url || '',
                 });
                 setProfileMsg('');
                 setShowProfileModal(true);
               }}
             >
               <div className="avatar" id="avatar" style={{ overflow: 'hidden', padding: 0, position: 'relative' }}>
-                {profile?.avatar_url || session?.user?.user_metadata?.avatar_url ? (
+                {profile?.avatar_url ? (
                   <img
-                    src={profile?.avatar_url || session?.user?.user_metadata?.avatar_url}
+                    src={profile?.avatar_url}
                     alt={profile?.username || 'Avatar'}
                     style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                   />
@@ -2136,16 +2138,16 @@ export default function App() {
                   username: profile?.username || session?.user?.email?.split('@')[0] || '',
                   handicap: String(profile?.handicap ?? 12),
                   bio: profile?.bio || '',
-                  avatar_url: profile?.avatar_url || session?.user?.user_metadata?.avatar_url || '',
+                  avatar_url: profile?.avatar_url || '',
                 });
                 setProfileMsg('');
                 setShowProfileModal(true);
               }}
             >
               <div className="roster-avatar you" style={{ overflow: 'hidden', padding: 0 }}>
-                {profile?.avatar_url || session?.user?.user_metadata?.avatar_url ? (
+                {profile?.avatar_url ? (
                   <img
-                    src={profile?.avatar_url || session?.user?.user_metadata?.avatar_url}
+                    src={profile?.avatar_url}
                     alt={profile?.username || 'You'}
                     style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                   />
